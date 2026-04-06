@@ -40,8 +40,16 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 #stats { flex:0 0 auto; display:flex; background:#0d1b2a; border-bottom:1px solid #1a3a5c; }
 .sb { flex:1; padding:4px 2px; border-right:1px solid #1a3a5c; text-align:center; cursor:default; }
 .sb:last-child { border-right:none; }
-.sv { font-size:13px; font-weight:800; }
+.sv { font-size:12px; font-weight:800; }
 .sl { color:#667; font-size:7px; text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Panel de resumen de ruta */
+#ruta-panel { display:none; flex:0 0 auto; background:#0a1628; border-bottom:1px solid #1a3a5c; padding:5px 10px; }
+#ruta-panel.visible { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.rp-title { font-size:10px; color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; flex:0 0 auto; }
+.rp-stat { background:#0f3460; border-radius:8px; padding:4px 10px; font-size:11px; text-align:center; }
+.rp-val { font-weight:800; font-size:13px; }
+.rp-lbl { color:#667; font-size:8px; }
 
 #map { flex:1 1 auto; min-height:0; width:100%; }
 
@@ -86,12 +94,22 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
   <div id="stats">
     <div class="sb"><div class="sv" id="sv_total" style="color:#e94560">—</div><div class="sl">Clientes</div></div>
     <div class="sb"><div class="sv" id="sv_vis" style="color:#2ECC71">—</div><div class="sl">Visibles</div></div>
-    <div class="sb"><div class="sv" id="sv_hora" style="color:#3498DB; font-size:10px">—</div><div class="sl">Última sync</div></div>
+    <div class="sb"><div class="sv" id="sv_monto" style="color:#F39C12;font-size:10px">—</div><div class="sl">Monto ruta</div></div>
+    <div class="sb"><div class="sv" id="sv_kms" style="color:#3498DB">—</div><div class="sl">KMs aprox</div></div>
     <div class="sb" onclick="toggleAutoSync()" style="cursor:pointer">
-      <div class="sv" id="sv_auto" style="color:#2ECC71">AUTO</div>
+      <div class="sv" id="sv_auto" style="color:#2ECC71;font-size:10px">AUTO</div>
       <div class="sl">30s sync</div>
     </div>
   </div>
+</div>
+
+<!-- Panel detalle por camión/día -->
+<div id="ruta-panel">
+  <span class="rp-title">📊 Selección:</span>
+  <div class="rp-stat"><div class="rp-val" id="rp_clientes" style="color:#e94560">—</div><div class="rp-lbl">Clientes</div></div>
+  <div class="rp-stat"><div class="rp-val" id="rp_monto" style="color:#F39C12">—</div><div class="rp-lbl">Monto estimado</div></div>
+  <div class="rp-stat"><div class="rp-val" id="rp_kms" style="color:#3498DB">—</div><div class="rp-lbl">KMs recorrido</div></div>
+  <div class="rp-stat"><div class="rp-val" id="rp_ticket" style="color:#2ECC71">—</div><div class="rp-lbl">Ticket prom</div></div>
 </div>
 
 <div id="map"></div>
@@ -99,6 +117,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 <script>
 var SHEETS_ID = "178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI";
 var COLORES   = { C1:'#E74C3C', C2:'#3498DB', C3:'#2ECC71', C4:'#F39C12' };
+var BODEGA    = { lat:-33.4956, lng:-70.7193 };
 
 var clientes = [], markers = [], map = null;
 var semana = 0, dia = 'todos';
@@ -106,13 +125,51 @@ var camsOn = { C1:true, C2:true, C3:true, C4:true };
 var autoSync = true, syncTimer = null, cbCount = 0;
 var sugIdx = -1;
 
+// ——— Haversine distance (km) ———
+function haversine(lat1, lng1, lat2, lng2) {
+  var R = 6371;
+  var dLat = (lat2-lat1) * Math.PI/180;
+  var dLng = (lng2-lng1) * Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+          Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Distancia recorrido estimado: Bodega → clientes (nearest neighbor) → Bodega
+function calcKms(lista) {
+  if(!lista.length) return 0;
+  var remaining = lista.slice();
+  var cur = BODEGA, total = 0;
+  while(remaining.length) {
+    var best = 0, bestD = Infinity;
+    for(var i=0; i<remaining.length; i++) {
+      var d = haversine(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
+      if(d < bestD) { bestD=d; best=i; }
+    }
+    total += bestD;
+    cur = remaining[best];
+    remaining.splice(best,1);
+  }
+  // Regreso a bodega
+  total += haversine(cur.lat, cur.lng, BODEGA.lat, BODEGA.lng);
+  // Factor 1.35 por calles (vs línea recta)
+  return Math.round(total * 1.35);
+}
+
+function fmtMonto(v) {
+  if(v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+  if(v >= 1000)    return '$' + Math.round(v/1000) + 'K';
+  return '$' + Math.round(v);
+}
+
 window.addEventListener('load', function() {
   map = L.map('map', { center:[-33.50,-70.67], zoom:11, preferCanvas:true, tap:false });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution:'© CartoDB', maxZoom:19
   }).addTo(map);
 
-  L.marker([-33.4956,-70.7193], {
+  L.marker([BODEGA.lat, BODEGA.lng], {
     icon: L.divIcon({
       html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5)">🏭 Bodega LUP</div>',
       iconAnchor:[55,10], className:''
@@ -121,8 +178,6 @@ window.addEventListener('load', function() {
 
   cargarDatos();
   setTimeout(function(){ map.invalidateSize(true); }, 400);
-
-  // Cerrar sugerencias al tocar el mapa
   document.getElementById('map').addEventListener('click', cerrarSugerencias);
 });
 
@@ -131,7 +186,6 @@ function cargarDatos() {
   var badge = document.getElementById('sync-badge');
   badge.className = 'syncing';
   badge.textContent = '⟳ Cargando...';
-
   cbCount++;
   var cbName = '__gviz_cb_' + cbCount;
 
@@ -139,7 +193,6 @@ function cargarDatos() {
     var el = document.getElementById('gviz_s');
     if(el) el.parentNode.removeChild(el);
     delete window[cbName];
-
     try {
       var cols = resp.table.cols;
       var rows = resp.table.rows;
@@ -170,14 +223,13 @@ function cargarDatos() {
       });
 
       document.getElementById('sv_total').textContent = clientes.length;
-      document.getElementById('sv_hora').textContent  = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
       badge.className = 'ok';
       badge.textContent = '✓ ' + clientes.length + ' clientes';
       setTimeout(function(){ badge.className=''; badge.textContent='⟳ Actualizar'; }, 4000);
       renderizar();
     } catch(e) {
       badge.className=''; badge.textContent='⚠ Error';
-      console.error('parse error', e);
+      console.error(e);
     }
     if(autoSync) syncTimer = setTimeout(cargarDatos, 30000);
   };
@@ -189,111 +241,12 @@ function cargarDatos() {
   document.head.appendChild(s);
 }
 
-// ——— AUTOCOMPLETADO ———
-function onBuscar() {
-  var val = document.getElementById('buscador').value.trim();
-  renderizar();
-  if(val.length < 2) { cerrarSugerencias(); return; }
-
-  var busq = val.toLowerCase();
-  var matches = [];
-  for(var i=0; i<clientes.length && matches.length<8; i++) {
-    var c = clientes[i];
-    if(c.nombre.toLowerCase().includes(busq) ||
-       (c.comuna||'').toLowerCase().includes(busq) ||
-       (c.cod||'').toLowerCase().includes(busq)) {
-      matches.push(c);
-    }
-  }
-
-  var box = document.getElementById('sugerencias');
-  if(matches.length === 0) { cerrarSugerencias(); return; }
-
-  var html = '';
-  matches.forEach(function(c, i) {
-    var color = COLORES[c.camion]||'#888';
-    html += '<div class="sug-item" onclick="seleccionarSugerencia(' + i + ')" data-idx="' + i + '">' +
-      '<span class="sug-nombre">' + resaltar(c.nombre, busq) + '</span>' +
-      '<span class="sug-sub">' +
-        '<span class="sug-badge" style="background:' + color + '">' + c.camion + '</span>' +
-        '<span class="sug-badge" style="background:#555">S' + c.semana + '</span>' +
-        (c.comuna ? c.comuna + ' · ' : '') + (c.vendedor||'') +
-      '</span>' +
-    '</div>';
-  });
-
-  box.innerHTML = html;
-  box.style.display = 'block';
-  sugIdx = -1;
-  // guardar matches para navegación
-  box._matches = matches;
-}
-
-function resaltar(texto, busq) {
-  var re = new RegExp('(' + busq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
-  return texto.replace(re, '<mark style="background:#e94560;color:#fff;border-radius:2px">$1</mark>');
-}
-
-function seleccionarSugerencia(i) {
-  var box = document.getElementById('sugerencias');
-  var matches = box._matches || [];
-  if(!matches[i]) return;
-  var c = matches[i];
-  document.getElementById('buscador').value = c.nombre;
-  cerrarSugerencias();
-  renderizar();
-  // Centrar en el cliente y abrir popup
-  setTimeout(function() {
-    for(var j=0; j<markers.length; j++) {
-      var m = markers[j];
-      var ll = m.getLatLng();
-      if(Math.abs(ll.lat - c.lat) < 0.0001 && Math.abs(ll.lng - c.lng) < 0.0001) {
-        map.setView([c.lat, c.lng], 16);
-        m.openPopup();
-        break;
-      }
-    }
-  }, 100);
-}
-
-function navSugerencias(e) {
-  var box = document.getElementById('sugerencias');
-  if(box.style.display === 'none') return;
-  var items = box.querySelectorAll('.sug-item');
-  if(e.key === 'ArrowDown') {
-    e.preventDefault();
-    sugIdx = Math.min(sugIdx+1, items.length-1);
-    actualizarActivo(items);
-  } else if(e.key === 'ArrowUp') {
-    e.preventDefault();
-    sugIdx = Math.max(sugIdx-1, 0);
-    actualizarActivo(items);
-  } else if(e.key === 'Enter') {
-    e.preventDefault();
-    if(sugIdx >= 0) seleccionarSugerencia(sugIdx);
-    else cerrarSugerencias();
-  } else if(e.key === 'Escape') {
-    cerrarSugerencias();
-  }
-}
-
-function actualizarActivo(items) {
-  items.forEach(function(el,i){ el.classList.toggle('activo', i===sugIdx); });
-  if(items[sugIdx]) items[sugIdx].scrollIntoView({block:'nearest'});
-}
-
-function cerrarSugerencias() {
-  var box = document.getElementById('sugerencias');
-  box.style.display = 'none';
-  sugIdx = -1;
-}
-
 // ——— RENDER ———
 function renderizar() {
   for(var i=0;i<markers.length;i++) map.removeLayer(markers[i]);
   markers = [];
   var busq = (document.getElementById('buscador').value||'').toLowerCase().trim();
-  var n = 0, bounds = [];
+  var visibles = [];
 
   clientes.forEach(function(c) {
     if(semana!==0 && c.semana!==semana) return;
@@ -303,8 +256,11 @@ function renderizar() {
        !(c.comuna||'').toLowerCase().includes(busq) &&
        !(c.vendedor||'').toLowerCase().includes(busq) &&
        !(c.cod||'').includes(busq)) return;
+    visibles.push(c);
+  });
 
-    n++;
+  var bounds = [];
+  visibles.forEach(function(c) {
     var color = COLORES[c.camion]||'#888';
     var r = (busq||dia!=='todos') ? 9 : 5;
     var m = L.circleMarker([c.lat,c.lng],{
@@ -315,7 +271,28 @@ function renderizar() {
     if(busq) bounds.push([c.lat,c.lng]);
   });
 
-  document.getElementById('sv_vis').textContent = n;
+  // Calcular estadísticas
+  var monto = visibles.reduce(function(s,c){ return s + c.ticket; }, 0);
+  var kms   = calcKms(visibles);
+  var ticketProm = visibles.length ? monto/visibles.length : 0;
+
+  document.getElementById('sv_vis').textContent   = visibles.length;
+  document.getElementById('sv_monto').textContent = fmtMonto(monto);
+  document.getElementById('sv_kms').textContent   = kms + ' km';
+
+  // Panel detalle (solo cuando hay filtro activo)
+  var hayFiltro = semana!==0 || dia!=='todos' || Object.values(camsOn).some(function(v){return !v;});
+  var panel = document.getElementById('ruta-panel');
+  if(hayFiltro && visibles.length > 0) {
+    panel.className = 'visible';
+    document.getElementById('rp_clientes').textContent = visibles.length;
+    document.getElementById('rp_monto').textContent    = fmtMonto(monto);
+    document.getElementById('rp_kms').textContent      = kms + ' km';
+    document.getElementById('rp_ticket').textContent   = fmtMonto(ticketProm);
+  } else {
+    panel.className = '';
+  }
+
   if(busq && bounds.length>0 && bounds.length<=30) map.fitBounds(bounds,{padding:[40,40]});
 }
 
@@ -331,19 +308,93 @@ function buildPopup(c) {
     '<div class="popup-row">📍 '+(c.direccion||'—')+'</div>' +
     '<div class="popup-row">🏘 '+(c.comuna||'—')+'</div>' +
     '<div class="popup-row">👤 '+(c.vendedor||'—')+'</div>' +
-    '<div class="popup-row">🛒 <b>'+c.n_compras+'</b> compras &nbsp;💰 <b>'+ticket+'</b> prom neto</div>' +
+    '<div class="popup-row">🛒 <b>'+c.n_compras+'</b> compras &nbsp;💰 <b>'+ticket+'</b> ticket prom/compra</div>' +
     '<div class="popup-row">🗂 '+(c.ruta||'—')+'</div>' +
     '<div class="popup-row" style="color:#999;font-size:10px">Cód: '+(c.cod||'—')+'</div>' +
     '<a class="popup-btn" href="https://www.google.com/maps?q='+c.lat+','+c.lng+'" target="_blank">📍 Abrir en Google Maps</a>' +
     '</div>';
 }
 
+// ——— AUTOCOMPLETADO ———
+function onBuscar() {
+  var val = document.getElementById('buscador').value.trim();
+  renderizar();
+  if(val.length < 2) { cerrarSugerencias(); return; }
+  var busq = val.toLowerCase();
+  var matches = [];
+  for(var i=0; i<clientes.length && matches.length<8; i++) {
+    var c = clientes[i];
+    if(c.nombre.toLowerCase().includes(busq) ||
+       (c.comuna||'').toLowerCase().includes(busq) ||
+       (c.cod||'').toLowerCase().includes(busq)) {
+      matches.push(c);
+    }
+  }
+  var box = document.getElementById('sugerencias');
+  if(!matches.length) { cerrarSugerencias(); return; }
+  var html = '';
+  matches.forEach(function(c,i) {
+    var color = COLORES[c.camion]||'#888';
+    html += '<div class="sug-item" onclick="seleccionarSugerencia('+i+')" data-idx="'+i+'">' +
+      '<span class="sug-nombre">'+resaltar(c.nombre,busq)+'</span>' +
+      '<span class="sug-sub">' +
+        '<span class="sug-badge" style="background:'+color+'">'+c.camion+'</span>' +
+        '<span class="sug-badge" style="background:#555">S'+c.semana+'</span>' +
+        (c.comuna?c.comuna+' · ':'')+(c.vendedor||'') +
+      '</span></div>';
+  });
+  box.innerHTML = html;
+  box.style.display = 'block';
+  box._matches = matches;
+  sugIdx = -1;
+}
+
+function resaltar(texto, busq) {
+  var re = new RegExp('('+busq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+  return texto.replace(re,'<mark style="background:#e94560;color:#fff;border-radius:2px">$1</mark>');
+}
+
+function seleccionarSugerencia(i) {
+  var box = document.getElementById('sugerencias');
+  var matches = box._matches||[];
+  if(!matches[i]) return;
+  var c = matches[i];
+  document.getElementById('buscador').value = c.nombre;
+  cerrarSugerencias();
+  renderizar();
+  setTimeout(function() {
+    for(var j=0;j<markers.length;j++) {
+      var m = markers[j], ll = m.getLatLng();
+      if(Math.abs(ll.lat-c.lat)<0.0001 && Math.abs(ll.lng-c.lng)<0.0001) {
+        map.setView([c.lat,c.lng],16);
+        m.openPopup(); break;
+      }
+    }
+  },100);
+}
+
+function navSugerencias(e) {
+  var box = document.getElementById('sugerencias');
+  if(box.style.display==='none') return;
+  var items = box.querySelectorAll('.sug-item');
+  if(e.key==='ArrowDown') { e.preventDefault(); sugIdx=Math.min(sugIdx+1,items.length-1); actualizarActivo(items); }
+  else if(e.key==='ArrowUp') { e.preventDefault(); sugIdx=Math.max(sugIdx-1,0); actualizarActivo(items); }
+  else if(e.key==='Enter') { e.preventDefault(); if(sugIdx>=0) seleccionarSugerencia(sugIdx); else cerrarSugerencias(); }
+  else if(e.key==='Escape') cerrarSugerencias();
+}
+function actualizarActivo(items) {
+  items.forEach(function(el,i){ el.classList.toggle('activo',i===sugIdx); });
+  if(items[sugIdx]) items[sugIdx].scrollIntoView({block:'nearest'});
+}
+function cerrarSugerencias() {
+  document.getElementById('sugerencias').style.display='none';
+  sugIdx=-1;
+}
+
 // ——— CONTROLES ———
 function setSemana(s) {
   semana=s;
-  document.getElementById('s0').className='btn btn-sem'+(s===0?' on':'');
-  document.getElementById('s1').className='btn btn-sem'+(s===1?' on':'');
-  document.getElementById('s2').className='btn btn-sem'+(s===2?' on':'');
+  ['s0','s1','s2'].forEach(function(id,i){ document.getElementById(id).className='btn btn-sem'+(i===s?' on':''); });
   renderizar();
 }
 function setDia(d){ dia=d; renderizar(); }
