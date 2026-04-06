@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Rutas LUP — Live</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { height:100%; overflow:hidden; font-family:-apple-system,Arial,sans-serif; background:#1a1a2e; color:#fff; }
+body { display:flex; flex-direction:column; height:100dvh; }
+
+#top { flex:0 0 auto; background:#16213e; border-bottom:2px solid #e94560; }
+#header { padding:8px 12px 4px; display:flex; align-items:center; justify-content:space-between; }
+h1 { font-size:13px; font-weight:700; }
+h1 span { color:#e94560; }
+#sync-badge { font-size:10px; padding:3px 10px; border-radius:20px; background:#0f3460; color:#aaa; cursor:pointer; white-space:nowrap; }
+#sync-badge.syncing { background:#e94560; color:#fff; animation:pulse 1s infinite; }
+#sync-badge.ok { background:#2ECC71; color:#000; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+#controles { display:flex; gap:4px; flex-wrap:wrap; align-items:center; padding:4px 10px 6px; }
+.btn { padding:5px 10px; border:none; border-radius:20px; cursor:pointer; font-size:11px; font-weight:700; }
+.btn-sem { background:#0f3460; color:#aaa; }
+.btn-sem.on { background:#e94560; color:#fff; }
+.btn-cam { color:#fff; opacity:0.3; border:none; cursor:pointer; }
+.btn-cam.on { opacity:1; }
+select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 8px; font-size:11px; }
+#buscador { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 10px; font-size:11px; flex:1; min-width:100px; }
+#buscador::placeholder { color:#667; }
+
+#stats { flex:0 0 auto; display:flex; background:#0d1b2a; border-bottom:1px solid #1a3a5c; }
+.sb { flex:1; padding:4px 2px; border-right:1px solid #1a3a5c; text-align:center; cursor:default; }
+.sb:last-child { border-right:none; }
+.sv { font-size:13px; font-weight:800; }
+.sl { color:#667; font-size:7px; text-transform:uppercase; letter-spacing:0.5px; }
+
+#map { flex:1 1 auto; min-height:0; width:100%; }
+
+.popup-wrap { min-width:230px; font-size:12px; line-height:1.5; }
+.popup-nombre { font-weight:700; font-size:13px; margin-bottom:5px; border-bottom:2px solid #e94560; padding-bottom:4px; color:#111; }
+.popup-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; margin:2px 2px 6px 0; color:#fff; }
+.popup-row { margin:2px 0; font-size:11px; color:#333; }
+.popup-btn { display:block; margin-top:8px; text-align:center; background:#3498DB; color:#fff !important; padding:7px; border-radius:8px; text-decoration:none !important; font-weight:700; font-size:12px; }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<div id="top">
+  <div id="header">
+    <h1>🚚 <span>LUP</span> — Rutas en tiempo real</h1>
+    <div id="sync-badge" onclick="cargarDatos()">⟳ Actualizar</div>
+  </div>
+  <div id="controles">
+    <button class="btn btn-sem on" onclick="setSemana(0)" id="s0">Todas</button>
+    <button class="btn btn-sem" onclick="setSemana(1)" id="s1">S1</button>
+    <button class="btn btn-sem" onclick="setSemana(2)" id="s2">S2</button>
+    <select onchange="setDia(this.value)">
+      <option value="todos">Todos los días</option>
+      <option value="Lunes">Lunes</option>
+      <option value="Martes">Martes</option>
+      <option value="Miercoles">Miércoles</option>
+      <option value="Jueves">Jueves</option>
+      <option value="Viernes">Viernes</option>
+    </select>
+    <button class="btn btn-cam on" style="background:#E74C3C" onclick="toggleCam('C1','c1')" id="c1">C1</button>
+    <button class="btn btn-cam on" style="background:#3498DB" onclick="toggleCam('C2','c2')" id="c2">C2</button>
+    <button class="btn btn-cam on" style="background:#2ECC71" onclick="toggleCam('C3','c3')" id="c3">C3</button>
+    <button class="btn btn-cam on" style="background:#F39C12" onclick="toggleCam('C4','c4')" id="c4">C4</button>
+    <input id="buscador" type="text" placeholder="🔍 Buscar cliente..." oninput="renderizar()">
+  </div>
+  <div id="stats">
+    <div class="sb"><div class="sv" id="sv_total" style="color:#e94560">—</div><div class="sl">Clientes</div></div>
+    <div class="sb"><div class="sv" id="sv_vis" style="color:#2ECC71">—</div><div class="sl">Visibles</div></div>
+    <div class="sb"><div class="sv" id="sv_hora" style="color:#3498DB; font-size:10px">—</div><div class="sl">Última sync</div></div>
+    <div class="sb" onclick="toggleAutoSync()" style="cursor:pointer">
+      <div class="sv" id="sv_auto" style="color:#2ECC71">AUTO</div>
+      <div class="sl">30s sync</div>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+var SHEETS_ID = "178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI";
+var COLORES   = { C1:'#E74C3C', C2:'#3498DB', C3:'#2ECC71', C4:'#F39C12' };
+
+var clientes = [], markers = [], map = null;
+var semana = 0, dia = 'todos';
+var camsOn = { C1:true, C2:true, C3:true, C4:true };
+var autoSync = true, syncTimer = null, cbCount = 0;
+
+window.addEventListener('load', function() {
+  map = L.map('map', { center:[-33.50,-70.67], zoom:11, preferCanvas:true, tap:false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution:'© CartoDB', maxZoom:19
+  }).addTo(map);
+
+  L.marker([-33.4956,-70.7193], {
+    icon: L.divIcon({
+      html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5)">🏭 Bodega LUP</div>',
+      iconAnchor:[55,10], className:''
+    })
+  }).addTo(map);
+
+  cargarDatos();
+  setTimeout(function(){ map.invalidateSize(true); }, 400);
+});
+
+function cargarDatos() {
+  var badge = document.getElementById('sync-badge');
+  badge.className = 'syncing';
+  badge.textContent = '⟳ Cargando...';
+
+  cbCount++;
+  var cbName = '__gviz_cb_' + cbCount;
+
+  window[cbName] = function(resp) {
+    // limpiar script
+    var el = document.getElementById('gviz_s');
+    if(el) el.parentNode.removeChild(el);
+    delete window[cbName];
+
+    try {
+      var cols = resp.table.cols;   // con headers=1, label = nombre de columna
+      var rows = resp.table.rows;
+
+      var idx = {};
+      cols.forEach(function(c,i){ if(c.label) idx[c.label] = i; });
+
+      clientes = [];
+      rows.forEach(function(row) {
+        var g = function(name) {
+          var i = idx[name];
+          if(i === undefined || !row.c || !row.c[i]) return '';
+          var v = row.c[i].v;
+          return (v !== null && v !== undefined) ? String(v) : '';
+        };
+        var lat = parseFloat(g('Lat'));
+        var lng = parseFloat(g('Lng'));
+        if(isNaN(lat) || isNaN(lng) || lat===0 || lng===0) return;
+        clientes.push({
+          cod: g('Codigo'), nombre: g('Nombre'),
+          direccion: g('Direccion'), comuna: g('Comuna'),
+          ruta: g('Ruta_Original'), segmento: g('Segmento'),
+          n_compras: parseInt(g('N_Compras'))||0,
+          ticket: parseFloat(g('Ticket_Promedio'))||0,
+          vendedor: g('Vendedor'), camion: g('Camion'),
+          semana: parseInt(g('Semana'))||1,
+          dia: g('Dia'), lat:lat, lng:lng
+        });
+      });
+
+      document.getElementById('sv_total').textContent = clientes.length;
+      document.getElementById('sv_hora').textContent  = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      badge.className = 'ok';
+      badge.textContent = '✓ ' + clientes.length + ' clientes';
+      setTimeout(function(){ badge.className=''; badge.textContent='⟳ Actualizar'; }, 4000);
+      renderizar();
+    } catch(e) {
+      badge.className=''; badge.textContent='⚠ Error - retry';
+      console.error('parse error', e, resp);
+    }
+    if(autoSync) syncTimer = setTimeout(cargarDatos, 30000);
+  };
+
+  var s = document.createElement('script');
+  s.id  = 'gviz_s';
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID +
+    '/gviz/tq?tqx=out:json%3BresponseHandler:' + cbName + '&sheet=Rutas&range=A:O&headers=1&t=' + Date.now();
+  document.head.appendChild(s);
+}
+
+function renderizar() {
+  for(var i=0;i<markers.length;i++) map.removeLayer(markers[i]);
+  markers = [];
+  var busq = (document.getElementById('buscador').value||'').toLowerCase().trim();
+  var n = 0, bounds = [];
+
+  clientes.forEach(function(c) {
+    if(semana!==0 && c.semana!==semana) return;
+    if(dia!=='todos' && c.dia!==dia) return;
+    if(!camsOn[c.camion]) return;
+    if(busq && !c.nombre.toLowerCase().includes(busq) &&
+       !(c.comuna||'').toLowerCase().includes(busq) &&
+       !(c.vendedor||'').toLowerCase().includes(busq) &&
+       !(c.cod||'').includes(busq)) return;
+
+    n++;
+    var color = COLORES[c.camion]||'#888';
+    var r = (busq||dia!=='todos') ? 9 : 5;
+    var m = L.circleMarker([c.lat,c.lng],{
+      radius:r, fillColor:color, color:'#fff', weight:1.5, fillOpacity:0.9
+    }).addTo(map);
+    m.bindPopup(buildPopup(c), {maxWidth:280});
+    markers.push(m);
+    if(busq) bounds.push([c.lat,c.lng]);
+  });
+
+  document.getElementById('sv_vis').textContent = n;
+  if(busq && bounds.length>0 && bounds.length<=30) map.fitBounds(bounds,{padding:[40,40]});
+}
+
+function buildPopup(c) {
+  var color  = COLORES[c.camion]||'#888';
+  var ticket = c.ticket ? '$'+Math.round(c.ticket).toLocaleString('es-CL') : '—';
+  return '<div class="popup-wrap">' +
+    '<div class="popup-nombre">'+c.nombre+'</div>' +
+    '<span class="popup-badge" style="background:'+color+'">'+c.camion+'</span>' +
+    '<span class="popup-badge" style="background:#555">S'+c.semana+'</span>' +
+    '<span class="popup-badge" style="background:#1a1a2e">'+(c.dia||'')+'</span>' +
+    '<span class="popup-badge" style="background:#2c3e50">'+(c.segmento||'')+'</span>' +
+    '<div class="popup-row">📍 '+(c.direccion||'—')+'</div>' +
+    '<div class="popup-row">🏘 '+(c.comuna||'—')+'</div>' +
+    '<div class="popup-row">👤 '+(c.vendedor||'—')+'</div>' +
+    '<div class="popup-row">🛒 <b>'+c.n_compras+'</b> compras &nbsp;💰 <b>'+ticket+'</b> prom neto</div>' +
+    '<div class="popup-row">🗂 '+(c.ruta||'—')+'</div>' +
+    '<div class="popup-row" style="color:#999;font-size:10px">Cód: '+(c.cod||'—')+'</div>' +
+    '<a class="popup-btn" href="https://www.google.com/maps?q='+c.lat+','+c.lng+'" target="_blank">📍 Abrir en Google Maps</a>' +
+    '</div>';
+}
+
+function setSemana(s) {
+  semana=s;
+  document.getElementById('s0').className='btn btn-sem'+(s===0?' on':'');
+  document.getElementById('s1').className='btn btn-sem'+(s===1?' on':'');
+  document.getElementById('s2').className='btn btn-sem'+(s===2?' on':'');
+  renderizar();
+}
+function setDia(d){ dia=d; renderizar(); }
+function toggleCam(cam,id){
+  camsOn[cam]=!camsOn[cam];
+  document.getElementById(id).classList.toggle('on',camsOn[cam]);
+  renderizar();
+}
+function toggleAutoSync(){
+  autoSync=!autoSync;
+  var el=document.getElementById('sv_auto');
+  el.textContent=autoSync?'AUTO':'OFF';
+  el.style.color=autoSync?'#2ECC71':'#e94560';
+  if(autoSync) cargarDatos(); else if(syncTimer) clearTimeout(syncTimer);
+}
+window.addEventListener('resize',function(){ if(map) map.invalidateSize(); });
+</script>
+</body>
+</html>
