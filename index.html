@@ -4,19 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Rutas LUP — Live</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { height:100%; overflow:hidden; font-family:-apple-system,Arial,sans-serif; background:#1a1a2e; color:#fff; }
 body { display:flex; flex-direction:column; height:100dvh; }
 
 #top { flex:0 0 auto; background:#16213e; border-bottom:2px solid #e94560; }
-#header { padding:8px 12px 4px; display:flex; align-items:center; justify-content:space-between; }
-h1 { font-size:13px; font-weight:700; }
+#header { padding:8px 12px 4px; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+h1 { font-size:13px; font-weight:700; flex:1; }
 h1 span { color:#e94560; }
 #sync-badge { font-size:10px; padding:3px 10px; border-radius:20px; background:#0f3460; color:#aaa; cursor:pointer; white-space:nowrap; }
 #sync-badge.syncing { background:#e94560; color:#fff; animation:pulse 1s infinite; }
 #sync-badge.ok { background:#2ECC71; color:#000; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Auth button */
+#auth-area { display:flex; align-items:center; gap:6px; }
+#btn-login { background:#e94560; color:#fff; border:none; border-radius:20px; padding:4px 12px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; }
+#btn-logout { background:#333; color:#aaa; border:none; border-radius:20px; padding:4px 10px; font-size:10px; cursor:pointer; white-space:nowrap; }
+#user-info { font-size:10px; color:#aaa; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#edit-badge { background:#2ECC71; color:#000; border-radius:20px; padding:2px 8px; font-size:9px; font-weight:700; }
+#readonly-badge { background:#555; color:#aaa; border-radius:20px; padding:2px 8px; font-size:9px; }
 
 #controles { display:flex; gap:4px; flex-wrap:wrap; align-items:center; padding:4px 10px 6px; }
 .btn { padding:5px 10px; border:none; border-radius:20px; cursor:pointer; font-size:11px; font-weight:700; }
@@ -24,15 +35,16 @@ h1 span { color:#e94560; }
 .btn-sem.on { background:#e94560; color:#fff; }
 .btn-cam { color:#fff; opacity:0.3; border:none; cursor:pointer; }
 .btn-cam.on { opacity:1; }
+.btn-sel { background:#0f3460; color:#aaa; }
+.btn-sel.on { background:#F39C12; color:#000; }
 select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 8px; font-size:11px; }
-
 #wrap-busq { position:relative; flex:1; min-width:100px; }
 #buscador { width:100%; background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 10px; font-size:11px; }
 #buscador::placeholder { color:#667; }
 #sugerencias { display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:#16213e; border:1px solid #334; border-radius:10px; z-index:9999; max-height:220px; overflow-y:auto; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
 .sug-item { padding:8px 12px; font-size:11px; cursor:pointer; border-bottom:1px solid #223; color:#ddd; display:flex; flex-direction:column; }
 .sug-item:last-child { border-bottom:none; }
-.sug-item:hover, .sug-item.activo { background:#0f3460; }
+.sug-item:hover,.sug-item.activo { background:#0f3460; }
 .sug-nombre { font-weight:700; color:#fff; }
 .sug-sub { color:#889; font-size:10px; margin-top:1px; }
 .sug-badge { display:inline-block; padding:1px 6px; border-radius:8px; font-size:9px; font-weight:700; color:#fff; margin-right:4px; }
@@ -43,30 +55,58 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 .sv { font-size:12px; font-weight:800; }
 .sl { color:#667; font-size:7px; text-transform:uppercase; letter-spacing:0.5px; }
 
-/* Panel de resumen de ruta */
 #ruta-panel { display:none; flex:0 0 auto; background:#0a1628; border-bottom:1px solid #1a3a5c; padding:5px 10px; }
 #ruta-panel.visible { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.rp-title { font-size:10px; color:#aaa; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; flex:0 0 auto; }
+.rp-title { font-size:10px; color:#aaa; font-weight:700; text-transform:uppercase; flex:0 0 auto; }
 .rp-stat { background:#0f3460; border-radius:8px; padding:4px 10px; font-size:11px; text-align:center; }
 .rp-val { font-weight:800; font-size:13px; }
 .rp-lbl { color:#667; font-size:8px; }
 
 #map { flex:1 1 auto; min-height:0; width:100%; }
 
+/* Barra selección múltiple */
+#sel-bar { display:none; position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#16213e; border:2px solid #F39C12; border-radius:16px; padding:8px 14px; z-index:1000; box-shadow:0 4px 20px rgba(0,0,0,0.7); min-width:280px; }
+#sel-bar.visible { display:flex; flex-direction:column; gap:6px; }
+#sel-title { font-size:11px; font-weight:700; color:#F39C12; text-align:center; }
+#sel-acciones { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.sel-btn { padding:5px 10px; border:none; border-radius:20px; cursor:pointer; font-size:11px; font-weight:700; color:#fff; }
+#sel-cancel { background:#555; color:#aaa; font-size:10px; border:none; border-radius:20px; padding:3px 10px; cursor:pointer; align-self:center; }
+
+/* Modal edición individual */
+#modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:2000; align-items:center; justify-content:center; }
+#modal-overlay.visible { display:flex; }
+#modal { background:#16213e; border:1px solid #334; border-radius:16px; padding:20px; width:90%; max-width:340px; }
+#modal h3 { font-size:13px; color:#e94560; margin-bottom:14px; border-bottom:1px solid #334; padding-bottom:8px; }
+.modal-field { margin-bottom:12px; }
+.modal-field label { font-size:10px; color:#aaa; text-transform:uppercase; display:block; margin-bottom:4px; }
+.modal-field select { width:100%; background:#0f3460; color:#fff; border:1px solid #334; border-radius:8px; padding:7px 10px; font-size:12px; }
+#modal-btns { display:flex; gap:8px; margin-top:16px; }
+#btn-guardar { flex:1; background:#2ECC71; color:#000; border:none; border-radius:10px; padding:10px; font-weight:700; font-size:13px; cursor:pointer; }
+#btn-guardar:disabled { background:#334; color:#667; cursor:default; }
+#btn-cancelar { background:#334; color:#aaa; border:none; border-radius:10px; padding:10px 16px; cursor:pointer; font-size:12px; }
+#modal-status { font-size:11px; color:#2ECC71; text-align:center; margin-top:8px; min-height:16px; }
+
+/* Popup */
 .popup-wrap { min-width:230px; font-size:12px; line-height:1.5; }
 .popup-nombre { font-weight:700; font-size:13px; margin-bottom:5px; border-bottom:2px solid #e94560; padding-bottom:4px; color:#111; }
 .popup-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; margin:2px 2px 6px 0; color:#fff; }
 .popup-row { margin:2px 0; font-size:11px; color:#333; }
-.popup-btn { display:block; margin-top:8px; text-align:center; background:#3498DB; color:#fff !important; padding:7px; border-radius:8px; text-decoration:none !important; font-weight:700; font-size:12px; }
+.popup-btn { display:block; margin-top:6px; text-align:center; background:#3498DB; color:#fff !important; padding:7px; border-radius:8px; text-decoration:none !important; font-weight:700; font-size:12px; }
+.popup-edit { display:block; margin-top:5px; text-align:center; background:#2ECC71; color:#000 !important; padding:7px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer; border:none; width:100%; }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
 <div id="top">
   <div id="header">
-    <h1>🚚 <span>LUP</span> — Rutas en tiempo real</h1>
+    <h1>🚚 <span>LUP</span> — Rutas</h1>
+    <div id="auth-area">
+      <div id="user-info" style="display:none"></div>
+      <span id="edit-badge" style="display:none">✏️ Editor</span>
+      <span id="readonly-badge" style="display:none">👁 Solo lectura</span>
+      <button id="btn-login" onclick="iniciarLogin()">🔑 Entrar</button>
+      <button id="btn-logout" style="display:none" onclick="cerrarSesion()">Salir</button>
+    </div>
     <div id="sync-badge" onclick="cargarDatos()">⟳ Actualizar</div>
   </div>
   <div id="controles">
@@ -85,6 +125,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
     <button class="btn btn-cam on" style="background:#3498DB" onclick="toggleCam('C2','c2')" id="c2">C2</button>
     <button class="btn btn-cam on" style="background:#2ECC71" onclick="toggleCam('C3','c3')" id="c3">C3</button>
     <button class="btn btn-cam on" style="background:#F39C12" onclick="toggleCam('C4','c4')" id="c4">C4</button>
+    <button class="btn btn-sel" onclick="toggleSeleccion()" id="btn-sel" style="display:none">☑ Seleccionar</button>
     <div id="wrap-busq">
       <input id="buscador" type="text" placeholder="🔍 Buscar cliente..."
         oninput="onBuscar()" onkeydown="navSugerencias(event)" autocomplete="off">
@@ -103,7 +144,6 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
   </div>
 </div>
 
-<!-- Panel detalle por camión/día -->
 <div id="ruta-panel">
   <span class="rp-title">📊 Selección:</span>
   <div class="rp-stat"><div class="rp-val" id="rp_clientes" style="color:#e94560">—</div><div class="rp-lbl">Clientes</div></div>
@@ -114,303 +154,473 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 
 <div id="map"></div>
 
+<!-- Barra selección múltiple -->
+<div id="sel-bar">
+  <div id="sel-title">0 clientes seleccionados</div>
+  <div id="sel-acciones">
+    <span style="font-size:10px;color:#aaa;align-self:center">Camión:</span>
+    <button class="sel-btn" style="background:#E74C3C" onclick="aplicarMasivo('camion','C1')">C1</button>
+    <button class="sel-btn" style="background:#3498DB" onclick="aplicarMasivo('camion','C2')">C2</button>
+    <button class="sel-btn" style="background:#2ECC71;color:#000" onclick="aplicarMasivo('camion','C3')">C3</button>
+    <button class="sel-btn" style="background:#F39C12;color:#000" onclick="aplicarMasivo('camion','C4')">C4</button>
+  </div>
+  <div id="sel-acciones2" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
+    <span style="font-size:10px;color:#aaa;align-self:center">Semana:</span>
+    <button class="sel-btn" style="background:#e94560" onclick="aplicarMasivo('semana','1')">S1</button>
+    <button class="sel-btn" style="background:#e94560" onclick="aplicarMasivo('semana','2')">S2</button>
+    <span style="font-size:10px;color:#aaa;align-self:center;margin-left:6px">Día:</span>
+    <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Lunes')">Lun</button>
+    <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Martes')">Mar</button>
+    <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Miercoles')">Mié</button>
+    <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Jueves')">Jue</button>
+    <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Viernes')">Vie</button>
+  </div>
+  <button id="sel-cancel" onclick="cancelarSeleccion()">✕ Cancelar</button>
+</div>
+
+<!-- Modal edición individual -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3 id="modal-titulo">Editar cliente</h3>
+    <div class="modal-field">
+      <label>Camión</label>
+      <select id="m-camion">
+        <option value="C1">C1</option><option value="C2">C2</option>
+        <option value="C3">C3</option><option value="C4">C4</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Semana</label>
+      <select id="m-semana">
+        <option value="1">Semana 1</option><option value="2">Semana 2</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Día de visita</label>
+      <select id="m-dia">
+        <option value="Lunes">Lunes</option><option value="Martes">Martes</option>
+        <option value="Miercoles">Miércoles</option><option value="Jueves">Jueves</option>
+        <option value="Viernes">Viernes</option>
+      </select>
+    </div>
+    <div id="modal-btns">
+      <button id="btn-cancelar" onclick="cerrarModal()">Cancelar</button>
+      <button id="btn-guardar" onclick="guardarCambio()">💾 Guardar</button>
+    </div>
+    <div id="modal-status"></div>
+  </div>
+</div>
+
 <script>
-var SHEETS_ID = "178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI";
-var COLORES   = { C1:'#E74C3C', C2:'#3498DB', C3:'#2ECC71', C4:'#F39C12' };
-var BODEGA    = { lat:-33.4956, lng:-70.7193 };
+// ——— CONFIG ———
+var CLIENT_ID   = '178029436426-trd4kji63pmec5b24jndm0goqn5djmi0.apps.googleusercontent.com';
+var SHEETS_ID   = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
+var SHEET_NAME  = 'Rutas';
+var COLORES     = { C1:'#E74C3C', C2:'#3498DB', C3:'#2ECC71', C4:'#F39C12' };
+var BODEGA      = { lat:-33.4956, lng:-70.7193 };
 
-var clientes = [], markers = [], map = null;
-var semana = 0, dia = 'todos';
-var camsOn = { C1:true, C2:true, C3:true, C4:true };
-var autoSync = true, syncTimer = null, cbCount = 0;
-var sugIdx = -1;
+// Lista de emails autorizados para editar
+var EDITORES = [
+  'agustin.moller@somoslup.cl',
+  'agustin.moller@gmail.com'
+];
 
-// ——— Haversine distance (km) ———
-function haversine(lat1, lng1, lat2, lng2) {
-  var R = 6371;
-  var dLat = (lat2-lat1) * Math.PI/180;
-  var dLng = (lng2-lng1) * Math.PI/180;
-  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
-          Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-          Math.sin(dLng/2)*Math.sin(dLng/2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+var clientes=[], markers=[], map=null;
+var semana=0, dia='todos';
+var camsOn={C1:true,C2:true,C3:true,C4:true};
+var autoSync=true, syncTimer=null, cbCount=0, sugIdx=-1;
+var modoSeleccion=false, seleccionados={};
+var accessToken=null, userEmail=null, puedeEditar=false;
+var clienteEditando=null, filaEditando=null;
+var colMap={}; // mapeo columna → índice
 
-// Distancia recorrido estimado: Bodega → clientes (nearest neighbor) → Bodega
-function calcKms(lista) {
-  if(!lista.length) return 0;
-  var remaining = lista.slice();
-  var cur = BODEGA, total = 0;
-  while(remaining.length) {
-    var best = 0, bestD = Infinity;
-    for(var i=0; i<remaining.length; i++) {
-      var d = haversine(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
-      if(d < bestD) { bestD=d; best=i; }
+// ——— AUTH ———
+function iniciarLogin() {
+  var client = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/spreadsheets email profile',
+    callback: function(resp) {
+      if(resp.error) { alert('Error al autenticar: '+resp.error); return; }
+      accessToken = resp.access_token;
+      // Obtener info del usuario
+      fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: 'Bearer ' + accessToken }
+      }).then(function(r){ return r.json(); })
+        .then(function(info) {
+          userEmail = info.email;
+          puedeEditar = EDITORES.indexOf(userEmail.toLowerCase()) >= 0;
+          actualizarUIAuth();
+        });
     }
-    total += bestD;
-    cur = remaining[best];
-    remaining.splice(best,1);
+  });
+  client.requestAccessToken();
+}
+
+function cerrarSesion() {
+  accessToken=null; userEmail=null; puedeEditar=false;
+  actualizarUIAuth();
+}
+
+function actualizarUIAuth() {
+  var btnLogin   = document.getElementById('btn-login');
+  var btnLogout  = document.getElementById('btn-logout');
+  var userInfo   = document.getElementById('user-info');
+  var editBadge  = document.getElementById('edit-badge');
+  var roBadge    = document.getElementById('readonly-badge');
+  var btnSel     = document.getElementById('btn-sel');
+
+  if(userEmail) {
+    btnLogin.style.display  = 'none';
+    btnLogout.style.display = 'inline-block';
+    userInfo.style.display  = 'inline-block';
+    userInfo.textContent    = userEmail.split('@')[0];
+    if(puedeEditar) {
+      editBadge.style.display = 'inline-block';
+      roBadge.style.display   = 'none';
+      btnSel.style.display    = 'inline-block';
+    } else {
+      editBadge.style.display = 'none';
+      roBadge.style.display   = 'inline-block';
+      btnSel.style.display    = 'none';
+    }
+  } else {
+    btnLogin.style.display  = 'inline-block';
+    btnLogout.style.display = 'none';
+    userInfo.style.display  = 'none';
+    editBadge.style.display = 'none';
+    roBadge.style.display   = 'none';
+    btnSel.style.display    = 'none';
   }
-  // Regreso a bodega
-  total += haversine(cur.lat, cur.lng, BODEGA.lat, BODEGA.lng);
-  // Factor 1.35 por calles (vs línea recta)
-  return Math.round(total * 1.35);
+  renderizar();
 }
 
-function fmtMonto(v) {
-  if(v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
-  if(v >= 1000)    return '$' + Math.round(v/1000) + 'K';
-  return '$' + Math.round(v);
-}
-
+// ——— MAPA ———
 window.addEventListener('load', function() {
-  map = L.map('map', { center:[-33.50,-70.67], zoom:11, preferCanvas:true, tap:false });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution:'© CartoDB', maxZoom:19
+  map = L.map('map',{center:[-33.50,-70.67],zoom:11,preferCanvas:true,tap:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'© CartoDB',maxZoom:19
   }).addTo(map);
-
-  L.marker([BODEGA.lat, BODEGA.lng], {
-    icon: L.divIcon({
-      html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5)">🏭 Bodega LUP</div>',
-      iconAnchor:[55,10], className:''
-    })
+  L.marker([BODEGA.lat,BODEGA.lng],{
+    icon:L.divIcon({html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5)">🏭 Bodega LUP</div>',iconAnchor:[55,10],className:''})
   }).addTo(map);
-
   cargarDatos();
-  setTimeout(function(){ map.invalidateSize(true); }, 400);
-  document.getElementById('map').addEventListener('click', cerrarSugerencias);
+  setTimeout(function(){ map.invalidateSize(true); },400);
+  document.getElementById('map').addEventListener('click',cerrarSugerencias);
 });
 
-// ——— CARGA DESDE SHEETS ———
+// ——— CARGA SHEETS ———
 function cargarDatos() {
-  var badge = document.getElementById('sync-badge');
-  badge.className = 'syncing';
-  badge.textContent = '⟳ Cargando...';
+  var badge=document.getElementById('sync-badge');
+  badge.className='syncing'; badge.textContent='⟳ Cargando...';
   cbCount++;
-  var cbName = '__gviz_cb_' + cbCount;
-
-  window[cbName] = function(resp) {
-    var el = document.getElementById('gviz_s');
+  var cbName='__gviz_cb_'+cbCount;
+  window[cbName]=function(resp) {
+    var el=document.getElementById('gviz_s');
     if(el) el.parentNode.removeChild(el);
     delete window[cbName];
     try {
-      var cols = resp.table.cols;
-      var rows = resp.table.rows;
-      var idx = {};
-      cols.forEach(function(c,i){ if(c.label) idx[c.label] = i; });
-
-      clientes = [];
-      rows.forEach(function(row) {
-        var g = function(name) {
-          var i = idx[name];
-          if(i === undefined || !row.c || !row.c[i]) return '';
-          var v = row.c[i].v;
-          return (v !== null && v !== undefined) ? String(v) : '';
+      var cols=resp.table.cols, rows=resp.table.rows;
+      colMap={};
+      cols.forEach(function(c,i){ if(c.label) colMap[c.label]=i; });
+      clientes=[];
+      rows.forEach(function(row,rowIdx) {
+        var g=function(name){
+          var i=colMap[name];
+          if(i===undefined||!row.c||!row.c[i]) return '';
+          var v=row.c[i].v;
+          return (v!==null&&v!==undefined)?String(v):'';
         };
-        var lat = parseFloat(g('Lat'));
-        var lng = parseFloat(g('Lng'));
-        if(isNaN(lat) || isNaN(lng) || lat===0 || lng===0) return;
+        var lat=parseFloat(g('Lat')), lng=parseFloat(g('Lng'));
+        if(isNaN(lat)||isNaN(lng)||lat===0||lng===0) return;
         clientes.push({
-          cod: g('Codigo'), nombre: g('Nombre'),
-          direccion: g('Direccion'), comuna: g('Comuna'),
-          ruta: g('Ruta_Original'), segmento: g('Segmento'),
-          n_compras: parseInt(g('N_Compras'))||0,
-          ticket: parseFloat(g('Ticket_Promedio'))||0,
-          vendedor: g('Vendedor'), camion: g('Camion'),
-          semana: parseInt(g('Semana'))||1,
-          dia: g('Dia'), lat:lat, lng:lng
+          rowIdx: rowIdx+2, // +2 por header + 1-based
+          cod:g('Codigo'), nombre:g('Nombre'),
+          direccion:g('Direccion'), comuna:g('Comuna'),
+          ruta:g('Ruta_Original'), segmento:g('Segmento'),
+          n_compras:parseInt(g('N_Compras'))||0,
+          ticket:parseFloat(g('Ticket_Promedio'))||0,
+          vendedor:g('Vendedor'), camion:g('Camion'),
+          semana:parseInt(g('Semana'))||1,
+          dia:g('Dia'), lat:lat, lng:lng
         });
       });
-
-      document.getElementById('sv_total').textContent = clientes.length;
-      badge.className = 'ok';
-      badge.textContent = '✓ ' + clientes.length + ' clientes';
-      setTimeout(function(){ badge.className=''; badge.textContent='⟳ Actualizar'; }, 4000);
+      document.getElementById('sv_total').textContent=clientes.length;
+      badge.className='ok'; badge.textContent='✓ '+clientes.length+' clientes';
+      setTimeout(function(){ badge.className=''; badge.textContent='⟳ Actualizar'; },4000);
       renderizar();
-    } catch(e) {
-      badge.className=''; badge.textContent='⚠ Error';
-      console.error(e);
-    }
-    if(autoSync) syncTimer = setTimeout(cargarDatos, 30000);
+    } catch(e){ badge.className=''; badge.textContent='⚠ Error'; console.error(e); }
+    if(autoSync) syncTimer=setTimeout(cargarDatos,30000);
   };
-
-  var s = document.createElement('script');
-  s.id  = 'gviz_s';
-  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEETS_ID +
-    '/gviz/tq?tqx=out:json%3BresponseHandler:' + cbName + '&sheet=Rutas&range=A:O&headers=1&t=' + Date.now();
+  var s=document.createElement('script');
+  s.id='gviz_s';
+  s.src='https://docs.google.com/spreadsheets/d/'+SHEETS_ID+'/gviz/tq?tqx=out:json%3BresponseHandler:'+cbName+'&sheet='+SHEET_NAME+'&range=A:O&headers=1&t='+Date.now();
   document.head.appendChild(s);
 }
 
 // ——— RENDER ———
+function haversine(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dG=(d-b)*Math.PI/180,x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)*Math.sin(dG/2);return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
+function calcKms(lista){if(!lista.length)return 0;var rem=lista.slice(),cur=BODEGA,t=0;while(rem.length){var best=0,bd=Infinity;for(var i=0;i<rem.length;i++){var d=haversine(cur.lat,cur.lng,rem[i].lat,rem[i].lng);if(d<bd){bd=d;best=i;}}t+=bd;cur=rem[best];rem.splice(best,1);}t+=haversine(cur.lat,cur.lng,BODEGA.lat,BODEGA.lng);return Math.round(t*1.35);}
+function fmtMonto(v){if(v>=1000000)return '$'+(v/1000000).toFixed(1)+'M';if(v>=1000)return '$'+Math.round(v/1000)+'K';return '$'+Math.round(v);}
+
 function renderizar() {
   for(var i=0;i<markers.length;i++) map.removeLayer(markers[i]);
-  markers = [];
-  var busq = (document.getElementById('buscador').value||'').toLowerCase().trim();
-  var visibles = [];
-
-  clientes.forEach(function(c) {
-    if(semana!==0 && c.semana!==semana) return;
-    if(dia!=='todos' && c.dia!==dia) return;
+  markers=[];
+  var busq=(document.getElementById('buscador').value||'').toLowerCase().trim();
+  var visibles=[];
+  clientes.forEach(function(c){
+    if(semana!==0&&c.semana!==semana) return;
+    if(dia!=='todos'&&c.dia!==dia) return;
     if(!camsOn[c.camion]) return;
-    if(busq && !c.nombre.toLowerCase().includes(busq) &&
-       !(c.comuna||'').toLowerCase().includes(busq) &&
-       !(c.vendedor||'').toLowerCase().includes(busq) &&
-       !(c.cod||'').includes(busq)) return;
+    if(busq&&!c.nombre.toLowerCase().includes(busq)&&!(c.comuna||'').toLowerCase().includes(busq)&&!(c.cod||'').includes(busq)) return;
     visibles.push(c);
   });
 
-  var bounds = [];
-  visibles.forEach(function(c) {
-    var color = COLORES[c.camion]||'#888';
-    var r = (busq||dia!=='todos') ? 9 : 5;
-    var m = L.circleMarker([c.lat,c.lng],{
-      radius:r, fillColor:color, color:'#fff', weight:1.5, fillOpacity:0.9
+  var bounds=[];
+  visibles.forEach(function(c){
+    var color=COLORES[c.camion]||'#888';
+    var sel=seleccionados[c.cod];
+    var r=(busq||dia!=='todos')?9:5;
+    var m=L.circleMarker([c.lat,c.lng],{
+      radius: sel?12:r,
+      fillColor: sel?'#FFD700':color,
+      color: sel?'#fff':'#fff',
+      weight: sel?3:1.5,
+      fillOpacity:0.95
     }).addTo(map);
-    m.bindPopup(buildPopup(c), {maxWidth:280});
+
+    m.on('click',function(e){
+      L.DomEvent.stopPropagation(e);
+      if(modoSeleccion){ toggleSeleccionar(c); return; }
+      cerrarSugerencias();
+    });
+
+    m.bindPopup(buildPopup(c),{maxWidth:280});
     markers.push(m);
     if(busq) bounds.push([c.lat,c.lng]);
   });
 
-  // Calcular estadísticas
-  var monto = visibles.reduce(function(s,c){ return s + c.ticket; }, 0);
-  var kms   = calcKms(visibles);
-  var ticketProm = visibles.length ? monto/visibles.length : 0;
+  var monto=visibles.reduce(function(s,c){return s+c.ticket;},0);
+  var kms=calcKms(visibles);
+  var ticketProm=visibles.length?monto/visibles.length:0;
 
-  document.getElementById('sv_vis').textContent   = visibles.length;
-  document.getElementById('sv_monto').textContent = fmtMonto(monto);
-  document.getElementById('sv_kms').textContent   = kms + ' km';
+  document.getElementById('sv_vis').textContent=visibles.length;
+  document.getElementById('sv_monto').textContent=fmtMonto(monto);
+  document.getElementById('sv_kms').textContent=kms+' km';
 
-  // Panel detalle (solo cuando hay filtro activo)
-  var hayFiltro = semana!==0 || dia!=='todos' || Object.values(camsOn).some(function(v){return !v;});
-  var panel = document.getElementById('ruta-panel');
-  if(hayFiltro && visibles.length > 0) {
-    panel.className = 'visible';
-    document.getElementById('rp_clientes').textContent = visibles.length;
-    document.getElementById('rp_monto').textContent    = fmtMonto(monto);
-    document.getElementById('rp_kms').textContent      = kms + ' km';
-    document.getElementById('rp_ticket').textContent   = fmtMonto(ticketProm);
-  } else {
-    panel.className = '';
-  }
+  var hayFiltro=semana!==0||dia!=='todos'||Object.keys(camsOn).some(function(k){return !camsOn[k];});
+  var panel=document.getElementById('ruta-panel');
+  if(hayFiltro&&visibles.length>0){
+    panel.className='visible';
+    document.getElementById('rp_clientes').textContent=visibles.length;
+    document.getElementById('rp_monto').textContent=fmtMonto(monto);
+    document.getElementById('rp_kms').textContent=kms+' km';
+    document.getElementById('rp_ticket').textContent=fmtMonto(ticketProm);
+  } else { panel.className=''; }
 
-  if(busq && bounds.length>0 && bounds.length<=30) map.fitBounds(bounds,{padding:[40,40]});
+  if(busq&&bounds.length>0&&bounds.length<=30) map.fitBounds(bounds,{padding:[40,40]});
 }
 
-function buildPopup(c) {
-  var color  = COLORES[c.camion]||'#888';
-  var ticket = c.ticket ? '$'+Math.round(c.ticket).toLocaleString('es-CL') : '—';
-  return '<div class="popup-wrap">' +
-    '<div class="popup-nombre">'+c.nombre+'</div>' +
-    '<span class="popup-badge" style="background:'+color+'">'+c.camion+'</span>' +
-    '<span class="popup-badge" style="background:#555">S'+c.semana+'</span>' +
-    '<span class="popup-badge" style="background:#1a1a2e">'+(c.dia||'')+'</span>' +
-    '<span class="popup-badge" style="background:#2c3e50">'+(c.segmento||'')+'</span>' +
-    '<div class="popup-row">📍 '+(c.direccion||'—')+'</div>' +
-    '<div class="popup-row">🏘 '+(c.comuna||'—')+'</div>' +
-    '<div class="popup-row">👤 '+(c.vendedor||'—')+'</div>' +
-    '<div class="popup-row">🛒 <b>'+c.n_compras+'</b> compras &nbsp;💰 <b>'+ticket+'</b> ticket prom/compra</div>' +
-    '<div class="popup-row">🗂 '+(c.ruta||'—')+'</div>' +
-    '<div class="popup-row" style="color:#999;font-size:10px">Cód: '+(c.cod||'—')+'</div>' +
-    '<a class="popup-btn" href="https://www.google.com/maps?q='+c.lat+','+c.lng+'" target="_blank">📍 Abrir en Google Maps</a>' +
+function buildPopup(c){
+  var color=COLORES[c.camion]||'#888';
+  var ticket=c.ticket?'$'+Math.round(c.ticket).toLocaleString('es-CL'):'—';
+  var editBtn = puedeEditar
+    ? '<button class="popup-edit" onclick="abrirModal(\''+c.cod+'\')">✏️ Editar este cliente</button>'
+    : '';
+  return '<div class="popup-wrap">'+
+    '<div class="popup-nombre">'+c.nombre+'</div>'+
+    '<span class="popup-badge" style="background:'+color+'">'+c.camion+'</span>'+
+    '<span class="popup-badge" style="background:#555">S'+c.semana+'</span>'+
+    '<span class="popup-badge" style="background:#1a1a2e">'+(c.dia||'')+'</span>'+
+    '<span class="popup-badge" style="background:#2c3e50">'+(c.segmento||'')+'</span>'+
+    '<div class="popup-row">📍 '+(c.direccion||'—')+'</div>'+
+    '<div class="popup-row">🏘 '+(c.comuna||'—')+'</div>'+
+    '<div class="popup-row">👤 '+(c.vendedor||'—')+'</div>'+
+    '<div class="popup-row">🛒 <b>'+c.n_compras+'</b> compras &nbsp;💰 <b>'+ticket+'</b> ticket prom</div>'+
+    '<a class="popup-btn" href="https://www.google.com/maps?q='+c.lat+','+c.lng+'" target="_blank">📍 Google Maps</a>'+
+    editBtn+
     '</div>';
 }
 
-// ——— AUTOCOMPLETADO ———
-function onBuscar() {
-  var val = document.getElementById('buscador').value.trim();
-  renderizar();
-  if(val.length < 2) { cerrarSugerencias(); return; }
-  var busq = val.toLowerCase();
-  var matches = [];
-  for(var i=0; i<clientes.length && matches.length<8; i++) {
-    var c = clientes[i];
-    if(c.nombre.toLowerCase().includes(busq) ||
-       (c.comuna||'').toLowerCase().includes(busq) ||
-       (c.cod||'').toLowerCase().includes(busq)) {
-      matches.push(c);
-    }
-  }
-  var box = document.getElementById('sugerencias');
-  if(!matches.length) { cerrarSugerencias(); return; }
-  var html = '';
-  matches.forEach(function(c,i) {
-    var color = COLORES[c.camion]||'#888';
-    html += '<div class="sug-item" onclick="seleccionarSugerencia('+i+')" data-idx="'+i+'">' +
-      '<span class="sug-nombre">'+resaltar(c.nombre,busq)+'</span>' +
-      '<span class="sug-sub">' +
-        '<span class="sug-badge" style="background:'+color+'">'+c.camion+'</span>' +
-        '<span class="sug-badge" style="background:#555">S'+c.semana+'</span>' +
-        (c.comuna?c.comuna+' · ':'')+(c.vendedor||'') +
-      '</span></div>';
+// ——— EDICIÓN INDIVIDUAL ———
+function abrirModal(cod) {
+  var c=clientes.find(function(x){return x.cod===cod;});
+  if(!c) return;
+  clienteEditando=c;
+  document.getElementById('modal-titulo').textContent='✏️ '+c.nombre;
+  document.getElementById('m-camion').value=c.camion;
+  document.getElementById('m-semana').value=String(c.semana);
+  document.getElementById('m-dia').value=c.dia;
+  document.getElementById('modal-status').textContent='';
+  document.getElementById('btn-guardar').disabled=false;
+  document.getElementById('btn-guardar').textContent='💾 Guardar';
+  document.getElementById('modal-overlay').className='visible';
+  // Cerrar popup del mapa
+  map.closePopup();
+}
+
+function cerrarModal(){ document.getElementById('modal-overlay').className=''; clienteEditando=null; }
+
+function guardarCambio() {
+  if(!clienteEditando||!accessToken) return;
+  var camion = document.getElementById('m-camion').value;
+  var sem    = document.getElementById('m-semana').value;
+  var diaVal = document.getElementById('m-dia').value;
+
+  document.getElementById('btn-guardar').disabled=true;
+  document.getElementById('btn-guardar').textContent='Guardando...';
+  document.getElementById('modal-status').textContent='';
+
+  var row = clienteEditando.rowIdx;
+  // Columnas: Camion=J(10), Semana=K(11), Dia=L(12) → letras
+  var colCamion = colIndexToLetter(colMap['Camion']);
+  var colSemana = colIndexToLetter(colMap['Semana']);
+  var colDia    = colIndexToLetter(colMap['Dia']);
+
+  var requests = [
+    escribirCelda(SHEET_NAME+'!'+colCamion+row, camion),
+    escribirCelda(SHEET_NAME+'!'+colSemana+row, sem),
+    escribirCelda(SHEET_NAME+'!'+colDia+row, diaVal)
+  ];
+
+  Promise.all(requests).then(function() {
+    document.getElementById('modal-status').textContent='✅ Guardado correctamente';
+    document.getElementById('btn-guardar').textContent='✅ Listo';
+    // Actualizar local
+    clienteEditando.camion=camion;
+    clienteEditando.semana=parseInt(sem);
+    clienteEditando.dia=diaVal;
+    setTimeout(function(){ cerrarModal(); renderizar(); },1200);
+  }).catch(function(e){
+    document.getElementById('modal-status').textContent='❌ Error: '+e.message;
+    document.getElementById('btn-guardar').disabled=false;
+    document.getElementById('btn-guardar').textContent='💾 Guardar';
   });
-  box.innerHTML = html;
-  box.style.display = 'block';
-  box._matches = matches;
-  sugIdx = -1;
 }
 
-function resaltar(texto, busq) {
-  var re = new RegExp('('+busq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
-  return texto.replace(re,'<mark style="background:#e94560;color:#fff;border-radius:2px">$1</mark>');
+function escribirCelda(range, value) {
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SHEETS_ID+'/values/'+encodeURIComponent(range)+'?valueInputOption=RAW', {
+    method:'PUT',
+    headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' },
+    body: JSON.stringify({ range:range, majorDimension:'ROWS', values:[[value]] })
+  }).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
 }
 
-function seleccionarSugerencia(i) {
-  var box = document.getElementById('sugerencias');
-  var matches = box._matches||[];
-  if(!matches[i]) return;
-  var c = matches[i];
-  document.getElementById('buscador').value = c.nombre;
-  cerrarSugerencias();
+function colIndexToLetter(i) {
+  var s='';
+  i++; // 1-based
+  while(i>0){ s=String.fromCharCode(65+(i-1)%26)+s; i=Math.floor((i-1)/26); }
+  return s;
+}
+
+// ——— SELECCIÓN MÚLTIPLE ———
+function toggleSeleccion() {
+  modoSeleccion=!modoSeleccion;
+  var btn=document.getElementById('btn-sel');
+  btn.className='btn btn-sel'+(modoSeleccion?' on':'');
+  btn.textContent=modoSeleccion?'✕ Salir':'☑ Seleccionar';
+  if(!modoSeleccion){ seleccionados={}; document.getElementById('sel-bar').className=''; }
   renderizar();
-  setTimeout(function() {
-    for(var j=0;j<markers.length;j++) {
-      var m = markers[j], ll = m.getLatLng();
-      if(Math.abs(ll.lat-c.lat)<0.0001 && Math.abs(ll.lng-c.lng)<0.0001) {
-        map.setView([c.lat,c.lng],16);
-        m.openPopup(); break;
-      }
-    }
+}
+
+function toggleSeleccionar(c) {
+  if(seleccionados[c.cod]) delete seleccionados[c.cod];
+  else seleccionados[c.cod]=c;
+  var n=Object.keys(seleccionados).length;
+  var bar=document.getElementById('sel-bar');
+  if(n>0){ bar.className='visible'; document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':''); }
+  else { bar.className=''; }
+  renderizar();
+}
+
+function cancelarSeleccion() {
+  seleccionados={}; modoSeleccion=false;
+  document.getElementById('btn-sel').className='btn btn-sel';
+  document.getElementById('btn-sel').textContent='☑ Seleccionar';
+  document.getElementById('sel-bar').className='';
+  renderizar();
+}
+
+function aplicarMasivo(campo, valor) {
+  if(!accessToken){ alert('Debes iniciar sesión primero'); return; }
+  var lista=Object.values(seleccionados);
+  if(!lista.length) return;
+
+  var colLetra;
+  if(campo==='camion') colLetra=colIndexToLetter(colMap['Camion']);
+  else if(campo==='semana') colLetra=colIndexToLetter(colMap['Semana']);
+  else if(campo==='dia') colLetra=colIndexToLetter(colMap['Dia']);
+
+  document.getElementById('sel-title').textContent='Guardando '+lista.length+' cambios...';
+
+  var promises=lista.map(function(c){
+    var range=SHEET_NAME+'!'+colLetra+c.rowIdx;
+    return escribirCelda(range, valor).then(function(){
+      if(campo==='camion') c.camion=valor;
+      else if(campo==='semana') c.semana=parseInt(valor);
+      else if(campo==='dia') c.dia=valor;
+    });
+  });
+
+  Promise.all(promises).then(function(){
+    document.getElementById('sel-title').textContent='✅ '+lista.length+' clientes actualizados';
+    setTimeout(function(){ cancelarSeleccion(); renderizar(); },1500);
+  }).catch(function(e){
+    document.getElementById('sel-title').textContent='❌ Error: '+e.message;
+  });
+}
+
+// ——— AUTOCOMPLETADO ———
+function onBuscar(){
+  var val=document.getElementById('buscador').value.trim();
+  renderizar();
+  if(val.length<2){cerrarSugerencias();return;}
+  var busq=val.toLowerCase(), matches=[];
+  for(var i=0;i<clientes.length&&matches.length<8;i++){
+    var c=clientes[i];
+    if(c.nombre.toLowerCase().includes(busq)||(c.comuna||'').toLowerCase().includes(busq)||(c.cod||'').toLowerCase().includes(busq)) matches.push(c);
+  }
+  var box=document.getElementById('sugerencias');
+  if(!matches.length){cerrarSugerencias();return;}
+  var html='';
+  matches.forEach(function(c,i){
+    var color=COLORES[c.camion]||'#888';
+    html+='<div class="sug-item" onclick="seleccionarSugerencia('+i+')" data-idx="'+i+'">'+
+      '<span class="sug-nombre">'+resaltar(c.nombre,val.toLowerCase())+'</span>'+
+      '<span class="sug-sub"><span class="sug-badge" style="background:'+color+'">'+c.camion+'</span>'+
+      '<span class="sug-badge" style="background:#555">S'+c.semana+'</span>'+
+      (c.comuna?c.comuna+' · ':'')+(c.vendedor||'')+'</span></div>';
+  });
+  box.innerHTML=html; box.style.display='block'; box._matches=matches; sugIdx=-1;
+}
+function resaltar(t,b){return t.replace(new RegExp('('+b.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark style="background:#e94560;color:#fff;border-radius:2px">$1</mark>');}
+function seleccionarSugerencia(i){
+  var box=document.getElementById('sugerencias'),matches=box._matches||[];
+  if(!matches[i]) return;
+  var c=matches[i];
+  document.getElementById('buscador').value=c.nombre;
+  cerrarSugerencias(); renderizar();
+  setTimeout(function(){
+    for(var j=0;j<markers.length;j++){var m=markers[j],ll=m.getLatLng();if(Math.abs(ll.lat-c.lat)<0.0001&&Math.abs(ll.lng-c.lng)<0.0001){map.setView([c.lat,c.lng],16);m.openPopup();break;}}
   },100);
 }
-
-function navSugerencias(e) {
-  var box = document.getElementById('sugerencias');
+function navSugerencias(e){
+  var box=document.getElementById('sugerencias');
   if(box.style.display==='none') return;
-  var items = box.querySelectorAll('.sug-item');
-  if(e.key==='ArrowDown') { e.preventDefault(); sugIdx=Math.min(sugIdx+1,items.length-1); actualizarActivo(items); }
-  else if(e.key==='ArrowUp') { e.preventDefault(); sugIdx=Math.max(sugIdx-1,0); actualizarActivo(items); }
-  else if(e.key==='Enter') { e.preventDefault(); if(sugIdx>=0) seleccionarSugerencia(sugIdx); else cerrarSugerencias(); }
+  var items=box.querySelectorAll('.sug-item');
+  if(e.key==='ArrowDown'){e.preventDefault();sugIdx=Math.min(sugIdx+1,items.length-1);actualizarActivo(items);}
+  else if(e.key==='ArrowUp'){e.preventDefault();sugIdx=Math.max(sugIdx-1,0);actualizarActivo(items);}
+  else if(e.key==='Enter'){e.preventDefault();if(sugIdx>=0)seleccionarSugerencia(sugIdx);else cerrarSugerencias();}
   else if(e.key==='Escape') cerrarSugerencias();
 }
-function actualizarActivo(items) {
-  items.forEach(function(el,i){ el.classList.toggle('activo',i===sugIdx); });
-  if(items[sugIdx]) items[sugIdx].scrollIntoView({block:'nearest'});
-}
-function cerrarSugerencias() {
-  document.getElementById('sugerencias').style.display='none';
-  sugIdx=-1;
-}
+function actualizarActivo(items){items.forEach(function(el,i){el.classList.toggle('activo',i===sugIdx);});if(items[sugIdx])items[sugIdx].scrollIntoView({block:'nearest'});}
+function cerrarSugerencias(){document.getElementById('sugerencias').style.display='none';sugIdx=-1;}
 
 // ——— CONTROLES ———
-function setSemana(s) {
-  semana=s;
-  ['s0','s1','s2'].forEach(function(id,i){ document.getElementById(id).className='btn btn-sem'+(i===s?' on':''); });
-  renderizar();
-}
-function setDia(d){ dia=d; renderizar(); }
-function toggleCam(cam,id){
-  camsOn[cam]=!camsOn[cam];
-  document.getElementById(id).classList.toggle('on',camsOn[cam]);
-  renderizar();
-}
-function toggleAutoSync(){
-  autoSync=!autoSync;
-  var el=document.getElementById('sv_auto');
-  el.textContent=autoSync?'AUTO':'OFF';
-  el.style.color=autoSync?'#2ECC71':'#e94560';
-  if(autoSync) cargarDatos(); else if(syncTimer) clearTimeout(syncTimer);
-}
-window.addEventListener('resize',function(){ if(map) map.invalidateSize(); });
+function setSemana(s){semana=s;['s0','s1','s2'].forEach(function(id,i){document.getElementById(id).className='btn btn-sem'+(i===s?' on':'');});renderizar();}
+function setDia(d){dia=d;renderizar();}
+function toggleCam(cam,id){camsOn[cam]=!camsOn[cam];document.getElementById(id).classList.toggle('on',camsOn[cam]);renderizar();}
+function toggleAutoSync(){autoSync=!autoSync;var el=document.getElementById('sv_auto');el.textContent=autoSync?'AUTO':'OFF';el.style.color=autoSync?'#2ECC71':'#e94560';if(autoSync)cargarDatos();else if(syncTimer)clearTimeout(syncTimer);}
+window.addEventListener('resize',function(){if(map)map.invalidateSize();});
 </script>
 </body>
 </html>
