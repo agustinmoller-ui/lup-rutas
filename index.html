@@ -25,8 +25,17 @@ h1 span { color:#e94560; }
 .btn-cam { color:#fff; opacity:0.3; border:none; cursor:pointer; }
 .btn-cam.on { opacity:1; }
 select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 8px; font-size:11px; }
-#buscador { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 10px; font-size:11px; flex:1; min-width:100px; }
+
+#wrap-busq { position:relative; flex:1; min-width:100px; }
+#buscador { width:100%; background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 10px; font-size:11px; }
 #buscador::placeholder { color:#667; }
+#sugerencias { display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:#16213e; border:1px solid #334; border-radius:10px; z-index:9999; max-height:220px; overflow-y:auto; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+.sug-item { padding:8px 12px; font-size:11px; cursor:pointer; border-bottom:1px solid #223; color:#ddd; display:flex; flex-direction:column; }
+.sug-item:last-child { border-bottom:none; }
+.sug-item:hover, .sug-item.activo { background:#0f3460; }
+.sug-nombre { font-weight:700; color:#fff; }
+.sug-sub { color:#889; font-size:10px; margin-top:1px; }
+.sug-badge { display:inline-block; padding:1px 6px; border-radius:8px; font-size:9px; font-weight:700; color:#fff; margin-right:4px; }
 
 #stats { flex:0 0 auto; display:flex; background:#0d1b2a; border-bottom:1px solid #1a3a5c; }
 .sb { flex:1; padding:4px 2px; border-right:1px solid #1a3a5c; text-align:center; cursor:default; }
@@ -68,7 +77,11 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
     <button class="btn btn-cam on" style="background:#3498DB" onclick="toggleCam('C2','c2')" id="c2">C2</button>
     <button class="btn btn-cam on" style="background:#2ECC71" onclick="toggleCam('C3','c3')" id="c3">C3</button>
     <button class="btn btn-cam on" style="background:#F39C12" onclick="toggleCam('C4','c4')" id="c4">C4</button>
-    <input id="buscador" type="text" placeholder="🔍 Buscar cliente..." oninput="renderizar()">
+    <div id="wrap-busq">
+      <input id="buscador" type="text" placeholder="🔍 Buscar cliente..."
+        oninput="onBuscar()" onkeydown="navSugerencias(event)" autocomplete="off">
+      <div id="sugerencias"></div>
+    </div>
   </div>
   <div id="stats">
     <div class="sb"><div class="sv" id="sv_total" style="color:#e94560">—</div><div class="sl">Clientes</div></div>
@@ -91,6 +104,7 @@ var clientes = [], markers = [], map = null;
 var semana = 0, dia = 'todos';
 var camsOn = { C1:true, C2:true, C3:true, C4:true };
 var autoSync = true, syncTimer = null, cbCount = 0;
+var sugIdx = -1;
 
 window.addEventListener('load', function() {
   map = L.map('map', { center:[-33.50,-70.67], zoom:11, preferCanvas:true, tap:false });
@@ -107,8 +121,12 @@ window.addEventListener('load', function() {
 
   cargarDatos();
   setTimeout(function(){ map.invalidateSize(true); }, 400);
+
+  // Cerrar sugerencias al tocar el mapa
+  document.getElementById('map').addEventListener('click', cerrarSugerencias);
 });
 
+// ——— CARGA DESDE SHEETS ———
 function cargarDatos() {
   var badge = document.getElementById('sync-badge');
   badge.className = 'syncing';
@@ -118,15 +136,13 @@ function cargarDatos() {
   var cbName = '__gviz_cb_' + cbCount;
 
   window[cbName] = function(resp) {
-    // limpiar script
     var el = document.getElementById('gviz_s');
     if(el) el.parentNode.removeChild(el);
     delete window[cbName];
 
     try {
-      var cols = resp.table.cols;   // con headers=1, label = nombre de columna
+      var cols = resp.table.cols;
       var rows = resp.table.rows;
-
       var idx = {};
       cols.forEach(function(c,i){ if(c.label) idx[c.label] = i; });
 
@@ -160,8 +176,8 @@ function cargarDatos() {
       setTimeout(function(){ badge.className=''; badge.textContent='⟳ Actualizar'; }, 4000);
       renderizar();
     } catch(e) {
-      badge.className=''; badge.textContent='⚠ Error - retry';
-      console.error('parse error', e, resp);
+      badge.className=''; badge.textContent='⚠ Error';
+      console.error('parse error', e);
     }
     if(autoSync) syncTimer = setTimeout(cargarDatos, 30000);
   };
@@ -173,6 +189,106 @@ function cargarDatos() {
   document.head.appendChild(s);
 }
 
+// ——— AUTOCOMPLETADO ———
+function onBuscar() {
+  var val = document.getElementById('buscador').value.trim();
+  renderizar();
+  if(val.length < 2) { cerrarSugerencias(); return; }
+
+  var busq = val.toLowerCase();
+  var matches = [];
+  for(var i=0; i<clientes.length && matches.length<8; i++) {
+    var c = clientes[i];
+    if(c.nombre.toLowerCase().includes(busq) ||
+       (c.comuna||'').toLowerCase().includes(busq) ||
+       (c.cod||'').toLowerCase().includes(busq)) {
+      matches.push(c);
+    }
+  }
+
+  var box = document.getElementById('sugerencias');
+  if(matches.length === 0) { cerrarSugerencias(); return; }
+
+  var html = '';
+  matches.forEach(function(c, i) {
+    var color = COLORES[c.camion]||'#888';
+    html += '<div class="sug-item" onclick="seleccionarSugerencia(' + i + ')" data-idx="' + i + '">' +
+      '<span class="sug-nombre">' + resaltar(c.nombre, busq) + '</span>' +
+      '<span class="sug-sub">' +
+        '<span class="sug-badge" style="background:' + color + '">' + c.camion + '</span>' +
+        '<span class="sug-badge" style="background:#555">S' + c.semana + '</span>' +
+        (c.comuna ? c.comuna + ' · ' : '') + (c.vendedor||'') +
+      '</span>' +
+    '</div>';
+  });
+
+  box.innerHTML = html;
+  box.style.display = 'block';
+  sugIdx = -1;
+  // guardar matches para navegación
+  box._matches = matches;
+}
+
+function resaltar(texto, busq) {
+  var re = new RegExp('(' + busq.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+  return texto.replace(re, '<mark style="background:#e94560;color:#fff;border-radius:2px">$1</mark>');
+}
+
+function seleccionarSugerencia(i) {
+  var box = document.getElementById('sugerencias');
+  var matches = box._matches || [];
+  if(!matches[i]) return;
+  var c = matches[i];
+  document.getElementById('buscador').value = c.nombre;
+  cerrarSugerencias();
+  renderizar();
+  // Centrar en el cliente y abrir popup
+  setTimeout(function() {
+    for(var j=0; j<markers.length; j++) {
+      var m = markers[j];
+      var ll = m.getLatLng();
+      if(Math.abs(ll.lat - c.lat) < 0.0001 && Math.abs(ll.lng - c.lng) < 0.0001) {
+        map.setView([c.lat, c.lng], 16);
+        m.openPopup();
+        break;
+      }
+    }
+  }, 100);
+}
+
+function navSugerencias(e) {
+  var box = document.getElementById('sugerencias');
+  if(box.style.display === 'none') return;
+  var items = box.querySelectorAll('.sug-item');
+  if(e.key === 'ArrowDown') {
+    e.preventDefault();
+    sugIdx = Math.min(sugIdx+1, items.length-1);
+    actualizarActivo(items);
+  } else if(e.key === 'ArrowUp') {
+    e.preventDefault();
+    sugIdx = Math.max(sugIdx-1, 0);
+    actualizarActivo(items);
+  } else if(e.key === 'Enter') {
+    e.preventDefault();
+    if(sugIdx >= 0) seleccionarSugerencia(sugIdx);
+    else cerrarSugerencias();
+  } else if(e.key === 'Escape') {
+    cerrarSugerencias();
+  }
+}
+
+function actualizarActivo(items) {
+  items.forEach(function(el,i){ el.classList.toggle('activo', i===sugIdx); });
+  if(items[sugIdx]) items[sugIdx].scrollIntoView({block:'nearest'});
+}
+
+function cerrarSugerencias() {
+  var box = document.getElementById('sugerencias');
+  box.style.display = 'none';
+  sugIdx = -1;
+}
+
+// ——— RENDER ———
 function renderizar() {
   for(var i=0;i<markers.length;i++) map.removeLayer(markers[i]);
   markers = [];
@@ -222,6 +338,7 @@ function buildPopup(c) {
     '</div>';
 }
 
+// ——— CONTROLES ———
 function setSemana(s) {
   semana=s;
   document.getElementById('s0').className='btn btn-sem'+(s===0?' on':'');
