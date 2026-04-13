@@ -26,6 +26,11 @@
     cursor: pointer; font-size: 13px; font-weight: 600;
   }
   .topbar .sync-btn:hover { background: rgba(255,255,255,0.35); }
+  .topbar-desc {
+    font-size: 11px; opacity: 0.65; font-style: italic;
+    border-left: 1px solid rgba(255,255,255,0.3); padding-left: 14px;
+  }
+  @media (max-width: 500px) { .topbar-desc { display: none; } }
 
   .tabs {
     display: flex; background: white;
@@ -195,6 +200,7 @@
     <div class="logo">🚚 Ruta C5 — Richard Vera Hijo</div>
     <div class="sub">Reactivación de clientes · LUP</div>
   </div>
+  <div class="topbar-desc">Campaña de reactivación · clientes con +21 días sin contacto</div>
   <div class="spacer"></div>
   <button class="sync-btn" onclick="cargarDatos()">⟳ Actualizar</button>
 </div>
