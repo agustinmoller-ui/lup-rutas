@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ruta C5 — Candelario</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+
+  .topbar {
+    background: linear-gradient(135deg, #1a3a6e, #2563eb);
+    color: white; padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: sticky; top: 0; z-index: 1000;
+  }
+  .topbar .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .topbar .sub { font-size: 12px; opacity: 0.75; }
+  .topbar .spacer { flex: 1; }
+  .topbar .sync-btn {
+    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
+    color: white; border-radius: 8px; padding: 7px 14px;
+    cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .topbar .sync-btn:hover { background: rgba(255,255,255,0.35); }
+
+  .tabs {
+    display: flex; background: white;
+    border-bottom: 2px solid #e2e8f0;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    padding: 12px 20px; font-size: 14px; font-weight: 600;
+    color: #64748b; cursor: pointer; white-space: nowrap;
+    border-bottom: 3px solid transparent; transition: all 0.2s;
+  }
+  .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab:hover:not(.active) { color: #374151; background: #f8fafc; }
+
+  .content { padding: 16px; max-width: 1100px; margin: 0 auto; }
+
+  .filters {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    background: white; border-radius: 12px;
+    padding: 14px; margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    align-items: center;
+  }
+  .filters select, .filters input {
+    border: 1.5px solid #e2e8f0; border-radius: 8px;
+    padding: 8px 12px; font-size: 14px; color: #374151;
+    background: #f8fafc; cursor: pointer;
+  }
+  .filters select:focus, .filters input:focus { outline: none; border-color: #2563eb; }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  .kpi-card {
+    background: white; border-radius: 12px;
+    padding: 16px; text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border-top: 4px solid #e2e8f0;
+  }
+  .kpi-card.azul  { border-top-color: #2563eb; }
+  .kpi-card.verde { border-top-color: #16a34a; }
+  .kpi-card.amarillo { border-top-color: #d97706; }
+  .kpi-card.rojo  { border-top-color: #dc2626; }
+  .kpi-card.gris  { border-top-color: #64748b; }
+  .kpi-num { font-size: 28px; font-weight: 800; color: #1a202c; }
+  .kpi-label { font-size: 11px; color: #64748b; margin-top: 4px; font-weight: 500; line-height: 1.4; }
+
+  .table-wrap { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .table-head { padding: 14px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }
+  .table-head .title { font-weight: 700; font-size: 15px; }
+  .search-box { flex: 1; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #1a3a6e; color: white; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 12px; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:hover td { background: #f0f7ff; }
+  tr.row-ok-fecha td { background: #f0fdf4; }
+  tr.row-ok-otra td  { background: #fefce8; }
+  tr.row-no-visit td { background: #fff1f2; }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+  }
+  .badge.pendiente  { background: #e2e8f0; color: #475569; }
+  .badge.ok-fecha   { background: #dcfce7; color: #166534; }
+  .badge.ok-otra    { background: #fef9c3; color: #854d0e; }
+  .badge.no-visit   { background: #fee2e2; color: #991b1b; }
+
+  /* Pin Maps compacto */
+  .maps-pin {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px;
+    background: #2563eb; color: white;
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    text-decoration: none; font-size: 14px;
+    box-shadow: 0 2px 6px rgba(37,99,235,0.5);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .maps-pin:hover { background: #1d4ed8; transform: rotate(-45deg) scale(1.15); }
+  .maps-pin span { display: block; transform: rotate(45deg); }
+
+  #map { height: 520px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+  .map-legend {
+    background: white; border-radius: 10px; padding: 12px 16px;
+    margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); font-size: 12px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  .popup-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: #1a202c; }
+  .popup-row { font-size: 12px; margin: 3px 0; color: #374151; }
+  .popup-maps-btn {
+    display: inline-block; margin-top: 8px;
+    background: #2563eb; color: white; padding: 6px 14px;
+    border-radius: 6px; text-decoration: none;
+    font-size: 12px; font-weight: 700;
+  }
+
+  .progress-bar-wrap { background: #e2e8f0; border-radius: 20px; height: 8px; overflow: hidden; margin-top: 6px; }
+  .progress-bar { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #2563eb, #16a34a); transition: width 0.5s; }
+
+  .cal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 10px; }
+  .cal-day {
+    background: white; border-radius: 10px; padding: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); cursor: pointer;
+    border: 2px solid transparent; transition: all 0.2s;
+  }
+  .cal-day:hover { border-color: #2563eb; transform: translateY(-2px); }
+  .cal-day.selected { border-color: #2563eb; background: #eff6ff; }
+  .cal-day.hoy { border-color: #16a34a; }
+  .cal-day .dia-nombre { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+  .cal-day .fecha-cal { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .cal-kpis { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .cal-kpi { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .cal-kpi.prog { background: #dbeafe; color: #1e40af; }
+  .cal-kpi.ok   { background: #dcfce7; color: #166534; }
+  .cal-kpi.pend { background: #fee2e2; color: #991b1b; }
+
+  @media (max-width: 600px) {
+    .content { padding: 10px; }
+    .kpi-num { font-size: 22px; }
+    #map { height: 380px; }
+  }
+
+  .loading { text-align: center; padding: 40px; color: #64748b; font-size: 16px; }
+  .empty { text-align: center; padding: 30px; color: #94a3b8; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="logo">🚚 Ruta C5</div>
+    <div class="sub">Candelario — Reactivación de clientes</div>
+  </div>
+  <div class="spacer"></div>
+  <button class="sync-btn" onclick="cargarDatos()">⟳ Actualizar</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active"  onclick="showTab('calendario')">📅 Calendario</div>
+  <div class="tab"         onclick="showTab('clientes')">👥 Clientes del día</div>
+  <div class="tab"         onclick="showTab('mapa')">🗺️ Mapa</div>
+  <div class="tab"         onclick="showTab('resumen')">📊 Resumen</div>
+</div>
+
+<div class="content">
+
+  <!-- CALENDARIO -->
+  <div id="tab-calendario">
+    <div class="filters">
+      <span style="font-weight:700;font-size:15px;">📅 Selecciona un día de ruta</span>
+    </div>
+    <div id="cal-grid" class="cal-grid"><div class="loading">⏳ Cargando...</div></div>
+  </div>
+
+  <!-- CLIENTES DEL DÍA -->
+  <div id="tab-clientes" style="display:none;">
+    <div class="kpi-grid" id="kpi-clientes"></div>
+    <div class="table-wrap">
+      <div class="table-head">
+        <span class="title">👥 Clientes del día</span>
+        <input class="search-box" type="text" placeholder="Buscar cliente..." oninput="filtrarTabla(this.value)">
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Cliente</th>
+              <th>Dirección</th>
+              <th>Comuna</th>
+              <th style="text-align:center">Días sin visita</th>
+              <th>Última visita</th>
+              <th style="text-align:center">Dist. (m)</th>
+              <th>Status</th>
+              <th style="text-align:center">Maps</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAPA -->
+  <div id="tab-mapa" style="display:none;">
+    <div class="filters">
+      <select id="filtro-status-mapa" onchange="renderMapa()">
+        <option value="">Todos los status</option>
+        <option value="Pendiente">Pendiente</option>
+        <option value="OK - Cumplió fecha">OK - Cumplió fecha</option>
+        <option value="OK - Otra fecha">OK - Otra fecha</option>
+        <option value="No visitado">No visitado</option>
+      </select>
+    </div>
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Pendiente</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> OK - Cumplió fecha</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div> OK - Otra fecha</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> No visitado</div>
+    </div>
+  </div>
+
+  <!-- RESUMEN -->
+  <div id="tab-resumen" style="display:none;">
+    <div class="kpi-grid" id="kpi-resumen"></div>
+    <div class="table-wrap" style="margin-top:16px;">
+      <div class="table-head"><span class="title">📆 Cumplimiento por día</span></div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Día</th><th style="text-align:center">Prog.</th>
+              <th style="text-align:center">✅ Misma fecha</th>
+              <th style="text-align:center">🔄 Otra fecha</th>
+              <th style="text-align:center">❌ No visitado</th>
+              <th style="text-align:center">⏳ Pendiente</th>
+              <th style="text-align:center">% Cumpl.</th>
+            </tr>
+          </thead>
+          <tbody id="resumen-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SHEET_ID   = '11jDyNuua6hK5r8ZNiPwWUhA6wzy8RB_x1urMdTjljwk';
+const SHEET_NAME = 'Ruta_C5';
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const DIAS_FULL  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+let allData = [];
+let diaSeleccionado = null;
+let mapa = null;
+let marcadores = [];
+
+// ── Parsear fecha gviz: "Date(2026,3,14)" → "2026-04-14"
+function parseGvizDate(v) {
+  if (!v) return '';
+  const m = String(v).match(/Date\((\d+),(\d+),(\d+)\)/);
+  if (!m) return String(v);
+  const y = m[1], mo = String(parseInt(m[2])+1).padStart(2,'0'), d = String(m[3]).padStart(2,'0');
+  return `${y}-${mo}-${d}`;
+}
+
+function formatFechaDisplay(iso) {
+  if (!iso || iso.length < 10) return iso;
+  const dt = new Date(iso + 'T12:00:00');
+  return `${dt.getDate()} ${MESES[dt.getMonth()]}`;
+}
+
+// ── Carga de datos
+async function cargarDatos() {
+  document.getElementById('cal-grid').innerHTML = '<div class="loading">⏳ Cargando datos...</div>';
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&t=${Date.now()}`;
+  try {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+
+    const cols = json.table.cols.map(c => c.label);
+    allData = json.table.rows.map(row => {
+      const obj = {};
+      cols.forEach((c, i) => {
+        if (!c) return;
+        const cell = row.c[i];
+        if (!cell) { obj[c] = ''; return; }
+        // Fechas
+        if (cell.v && String(cell.v).startsWith('Date(')) {
+          obj[c] = parseGvizDate(cell.v);
+        } else {
+          obj[c] = cell.f !== undefined && cell.f !== null ? cell.f : (cell.v !== null ? cell.v : '');
+        }
+      });
+      return obj;
+    }).filter(r => r['Cliente']);
+
+    // Día de hoy
+    const hoy = new Date();
+    const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
+    const fechas = [...new Set(allData.map(r => r['Fecha']))].sort();
+    diaSeleccionado = fechas.includes(hoyISO) ? hoyISO : fechas[0];
+
+    renderCalendario();
+    renderDiaSeleccionado();
+    renderResumen();
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('cal-grid').innerHTML = `<div class="empty">⚠️ Error cargando datos.<br><small>${e.message}</small></div>`;
+  }
+}
+
+// ── Calendario
+function renderCalendario() {
+  const fechas = [...new Set(allData.map(r => r['Fecha']))].sort();
+  const hoy = new Date();
+  const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  fechas.forEach(fecha => {
+    const cl = allData.filter(r => r['Fecha'] === fecha);
+    const prog = cl.length;
+    const okF  = cl.filter(r => r['Status'] === 'OK - Cumplió fecha').length;
+    const okO  = cl.filter(r => r['Status'] === 'OK - Otra fecha').length;
+    const noV  = cl.filter(r => r['Status'] === 'No visitado').length;
+    const pct  = prog > 0 ? Math.round((okF+okO)/prog*100) : 0;
+    const esFuturo = fecha > hoyISO;
+    const esHoy    = fecha === hoyISO;
+
+    const dt = new Date(fecha + 'T12:00:00');
+    const div = document.createElement('div');
+    div.className = `cal-day ${diaSeleccionado===fecha?'selected':''} ${esHoy?'hoy':''}`;
+    div.onclick = () => seleccionarDia(fecha);
+    div.innerHTML = `
+      <div class="dia-nombre">${DIAS_FULL[dt.getDay()]}${esHoy?' 🟢 HOY':''}</div>
+      <div class="fecha-cal">${dt.getDate()} ${MESES[dt.getMonth()]}</div>
+      <div class="cal-kpis">
+        <span class="cal-kpi prog">📋 ${prog}</span>
+        ${!esFuturo ? `<span class="cal-kpi ok">✅ ${okF+okO}</span>` : ''}
+        ${noV>0     ? `<span class="cal-kpi pend">❌ ${noV}</span>` : ''}
+        ${!esFuturo && prog>0 ? `<span class="cal-kpi ok" style="background:#f0fdf4;color:#166534">${pct}%</span>` : ''}
+      </div>
+      ${!esFuturo ? `<div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+    `;
+    grid.appendChild(div);
+  });
+}
+
+function seleccionarDia(fecha) {
+  diaSeleccionado = fecha;
+  renderCalendario();
+  renderDiaSeleccionado();
+  showTab('clientes');
+}
+
+// ── Clientes del día
+function renderDiaSeleccionado() {
+  if (!diaSeleccionado) return;
+  const cl = allData.filter(r => r['Fecha'] === diaSeleccionado);
+  const prog = cl.length;
+  const okF  = cl.filter(r => r['Status'] === 'OK - Cumplió fecha').length;
+  const okO  = cl.filter(r => r['Status'] === 'OK - Otra fecha').length;
+  const noV  = cl.filter(r => r['Status'] === 'No visitado').length;
+  const pct  = prog > 0 ? Math.round((okF+okO)/prog*100) : 0;
+  const dt   = new Date(diaSeleccionado + 'T12:00:00');
+
+  document.getElementById('kpi-clientes').innerHTML = `
+    <div class="kpi-card azul">
+      <div class="kpi-num">${prog}</div>
+      <div class="kpi-label">📋 Programados<br><small>${DIAS_FULL[dt.getDay()]} ${dt.getDate()} ${MESES[dt.getMonth()]}</small></div>
+    </div>
+    <div class="kpi-card verde">
+      <div class="kpi-num">${okF}</div>
+      <div class="kpi-label">✅ OK misma fecha</div>
+    </div>
+    <div class="kpi-card amarillo">
+      <div class="kpi-num">${okO}</div>
+      <div class="kpi-label">🔄 OK otra fecha</div>
+    </div>
+    <div class="kpi-card rojo">
+      <div class="kpi-num">${noV}</div>
+      <div class="kpi-label">❌ No visitados</div>
+    </div>
+    <div class="kpi-card gris">
+      <div class="kpi-num">${pct}%</div>
+      <div class="kpi-label">📈 Cumplimiento</div>
+    </div>
+  `;
+  renderTabla(cl);
+}
+
+function renderTabla(clientes) {
+  const statusClass = {
+    'Pendiente':'pendiente','OK - Cumplió fecha':'ok-fecha',
+    'OK - Otra fecha':'ok-otra','No visitado':'no-visit'
+  };
+  const rowClass = {
+    'OK - Cumplió fecha':'row-ok-fecha','OK - Otra fecha':'row-ok-otra','No visitado':'row-no-visit'
+  };
+  document.getElementById('tabla-body').innerHTML = clientes.map(c => {
+    const st  = c['Status'] || 'Pendiente';
+    const lat = parseFloat(c['Lat']);
+    const lng = parseFloat(c['Lng']);
+    const mapsUrl = c['Google Maps'] || (lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : '');
+    const dist = c['Distancia última visita (m)'];
+    const distStr = dist ? `${parseFloat(dist).toFixed(0)}` : '—';
+    const dias = parseInt(c['Días sin visita']);
+    const diasColor = dias > 60 ? '#dc2626' : '#d97706';
+
+    return `<tr class="${rowClass[st]||''}">
+      <td style="font-weight:700;color:#64748b">${c['N°']||''}</td>
+      <td style="font-weight:600">${c['Cliente']}</td>
+      <td style="color:#64748b;font-size:12px">${c['Dirección']}</td>
+      <td>${c['Comuna']}</td>
+      <td style="text-align:center;font-weight:700;color:${diasColor}">${dias||'—'}</td>
+      <td style="font-size:12px">${formatFechaDisplay(c['Última visita'])}</td>
+      <td style="text-align:center;font-size:12px">${distStr}</td>
+      <td><span class="badge ${statusClass[st]||'pendiente'}">${st}</span></td>
+      <td style="text-align:center">${mapsUrl
+        ? `<a class="maps-pin" href="${mapsUrl}" target="_blank" title="Abrir en Google Maps"><span>📍</span></a>`
+        : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarTabla(texto) {
+  const cl = allData.filter(r => r['Fecha'] === diaSeleccionado);
+  const f  = texto.toLowerCase();
+  const filtrados = f ? cl.filter(c =>
+    (c['Cliente']||'').toLowerCase().includes(f) ||
+    (c['Dirección']||'').toLowerCase().includes(f) ||
+    (c['Comuna']||'').toLowerCase().includes(f)
+  ) : cl;
+  renderTabla(filtrados);
+}
+
+// ── Mapa
+function renderMapa() {
+  if (!mapa) {
+    mapa = L.map('map').setView([-33.47, -70.65], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap', maxZoom: 19
+    }).addTo(mapa);
+  }
+  marcadores.forEach(m => mapa.removeLayer(m));
+  marcadores = [];
+
+  const filtroSt = document.getElementById('filtro-status-mapa').value;
+  const cl = allData.filter(r => r['Fecha'] === diaSeleccionado);
+  const lista = filtroSt ? cl.filter(r => r['Status'] === filtroSt) : cl;
+
+  const COLORES = {
+    'Pendiente':'#2563eb','OK - Cumplió fecha':'#16a34a',
+    'OK - Otra fecha':'#d97706','No visitado':'#dc2626'
+  };
+
+  lista.forEach(c => {
+    const lat = parseFloat(c['Lat']);
+    const lng = parseFloat(c['Lng']);
+    if (!lat || !lng) return;
+
+    const st    = c['Status'] || 'Pendiente';
+    const color = COLORES[st] || '#2563eb';
+    const dist  = c['Distancia última visita (m)'];
+    const mapsUrl = c['Google Maps'] || `https://www.google.com/maps?q=${lat},${lng}`;
+
+    const icon = L.divIcon({
+      html: `<div style="background:${color};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${c['N°']||'•'}</div>`,
+      className:'', iconSize:[28,28], iconAnchor:[14,14]
+    });
+
+    const popup = `
+      <div class="popup-title">${c['N°']||''}. ${c['Cliente']}</div>
+      <div class="popup-row">📍 ${c['Dirección']}, ${c['Comuna']}</div>
+      <div class="popup-row">📅 Última visita: <strong>${formatFechaDisplay(c['Última visita'])}</strong></div>
+      <div class="popup-row">⏰ Días sin visita: <strong>${c['Días sin visita']}</strong></div>
+      ${dist ? `<div class="popup-row">📡 Dist. último registro: <strong>${parseFloat(dist).toFixed(0)} m</strong></div>` : ''}
+      <div class="popup-row">👤 Vendedor previo: ${c['Vendedor previo']}</div>
+      <div style="margin-top:6px"><span style="background:${color}20;color:${color};border:1px solid ${color}50;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${st}</span></div>
+      <a class="popup-maps-btn" href="${mapsUrl}" target="_blank">📍 Abrir en Maps</a>
+    `;
+
+    const marker = L.marker([lat,lng],{icon}).addTo(mapa).bindPopup(popup,{maxWidth:270});
+    marcadores.push(marker);
+  });
+
+  if (marcadores.length > 0) {
+    mapa.fitBounds(L.featureGroup(marcadores).getBounds().pad(0.1));
+  }
+}
+
+// ── Resumen general
+function renderResumen() {
+  const fechas = [...new Set(allData.map(r => r['Fecha']))].sort();
+  const hoy = new Date();
+  const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
+
+  let tProg=0, tOk=0, tNoV=0, tPend=0;
+
+  document.getElementById('resumen-body').innerHTML = fechas.map(fecha => {
+    const cl  = allData.filter(r => r['Fecha'] === fecha);
+    const prog = cl.length;
+    const okF  = cl.filter(r => r['Status'] === 'OK - Cumplió fecha').length;
+    const okO  = cl.filter(r => r['Status'] === 'OK - Otra fecha').length;
+    const noV  = cl.filter(r => r['Status'] === 'No visitado').length;
+    const pend = cl.filter(r => r['Status'] === 'Pendiente').length;
+    const pct  = prog > 0 ? Math.round((okF+okO)/prog*100) : 0;
+    const esFuturo = fecha > hoyISO;
+    const dt = new Date(fecha + 'T12:00:00');
+
+    tProg += prog; tOk += okF+okO; tNoV += noV; tPend += pend;
+
+    const pctColor = pct >= 80 ? '#16a34a' : pct >= 50 ? '#d97706' : '#dc2626';
+    return `<tr onclick="seleccionarDia('${fecha}')" style="cursor:pointer;${diaSeleccionado===fecha?'background:#eff6ff;font-weight:600':''}">
+      <td>${dt.getDate()} ${MESES[dt.getMonth()]}</td>
+      <td>${DIAS_FULL[dt.getDay()]}</td>
+      <td style="text-align:center">${prog}</td>
+      <td style="text-align:center;color:#16a34a;font-weight:700">${okF||'—'}</td>
+      <td style="text-align:center;color:#d97706;font-weight:700">${okO||'—'}</td>
+      <td style="text-align:center;color:#dc2626;font-weight:700">${!esFuturo?(noV||'—'):'—'}</td>
+      <td style="text-align:center;color:#64748b">${pend}</td>
+      <td style="text-align:center;font-weight:700;color:${pctColor}">${esFuturo?'—':pct+'%'}</td>
+    </tr>`;
+  }).join('');
+
+  const pctTotal = tProg > 0 ? Math.round(tOk/tProg*100) : 0;
+  document.getElementById('kpi-resumen').innerHTML = `
+    <div class="kpi-card azul"><div class="kpi-num">${tProg}</div><div class="kpi-label">📋 Total clientes</div></div>
+    <div class="kpi-card verde"><div class="kpi-num">${tOk}</div><div class="kpi-label">✅ Visitados OK</div></div>
+    <div class="kpi-card rojo"><div class="kpi-num">${tNoV}</div><div class="kpi-label">❌ No visitados</div></div>
+    <div class="kpi-card gris"><div class="kpi-num">${tPend}</div><div class="kpi-label">⏳ Pendientes</div></div>
+    <div class="kpi-card ${pctTotal>=70?'verde':'amarillo'}"><div class="kpi-num">${pctTotal}%</div><div class="kpi-label">📈 Cumplimiento total</div></div>
+  `;
+}
+
+// ── Tabs
+function showTab(name) {
+  ['calendario','clientes','mapa','resumen'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t===name?'':'none';
+  });
+  document.querySelectorAll('.tab').forEach((el,i) => {
+    el.classList.toggle('active', ['calendario','clientes','mapa','resumen'][i]===name);
+  });
+  if (name==='mapa') setTimeout(()=>{ if(mapa) mapa.invalidateSize(); renderMapa(); },100);
+}
+
+cargarDatos();
+</script>
+</body>
+</html>
