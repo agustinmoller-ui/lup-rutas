@@ -424,7 +424,7 @@ async function syncDatos() {
   const prevDias = new Set(diasSeleccionados);
   try {
     // 1) Llamar al backend que actualiza el sheet y devuelve stats
-    const BACKEND = 'https://backend.base44.com/api/apps/69d037d5322815eaf3e3c640/functions/syncRutaC5';
+    const BACKEND = 'https://lupita-f3e3c640.base44.app/functions/syncRutaC5';
     const syncRes = await fetch(BACKEND, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
