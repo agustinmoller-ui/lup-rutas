@@ -355,26 +355,30 @@ function fmtPesos(val) {
   return '$' + Math.round(n).toLocaleString('es-CL');
 }
 
-// Status raw del sheet (para tabla/resumen)
-// _status simplificado (para mapa y conteos)
+// _status simplificado para mapa y conteos
 function normStatus(st) {
   if (!st) return 'Pendiente';
   const s = st.trim();
-  // Mapa/conteos: agrupado
+  if (s.startsWith('✅')) return 'Venta';
+  if (s.startsWith('👁')) return 'Visitado';
+  if (s.startsWith('❌')) return 'No visitado';
+  // legacy
   if (s === 'Venta' || s === 'OK - Cumplió fecha') return 'Venta';
   if (s === 'Visitado' || s === 'OK - Otra fecha') return 'Visitado';
   if (s === 'No visitado') return 'No visitado';
   return 'Pendiente';
 }
-// Status para mostrar en tabla (etiqueta legible)
+// Etiqueta para mostrar en tabla (ya viene con emoji del sheet)
 function labelStatus(st) {
-  if (!st) return 'Pendiente';
+  if (!st) return '⏳ Pendiente';
   const s = st.trim();
-  if (s === 'Venta')              return '✅ Venta · misma fecha';
-  if (s === 'OK - Cumplió fecha') return '✅ Venta · misma fecha';
-  if (s === 'Visitado')           return '👁 Visitado · misma fecha';
-  if (s === 'OK - Otra fecha')    return '👁 Visitado · otra fecha';
-  if (s === 'No visitado')        return '❌ No visitado';
+  // Si ya tiene emoji, devolver tal cual
+  if (s.startsWith('✅') || s.startsWith('👁') || s.startsWith('❌') || s.startsWith('⏳')) return s;
+  // Legacy
+  if (s === 'Venta' || s === 'OK - Cumplió fecha') return '✅ Venta · misma fecha';
+  if (s === 'Visitado') return '👁 Visitado · misma fecha';
+  if (s === 'OK - Otra fecha') return '👁 Visitado · otra fecha';
+  if (s === 'No visitado') return '❌ No visitado';
   return '⏳ Pendiente';
 }
 
