@@ -503,7 +503,7 @@ function renderMapa() {
     if (!lat || !lng) return;
     const st    = c['_status'];
     const color = COLORES[st] || '#2563eb';
-    const mapsUrl = c['Google Maps'] || `https://www.google.com/maps?q=${lat},${lng}`;
+    const mapsUrl = (c['Google Maps'] && c['Google Maps'].startsWith('http')) ? c['Google Maps'] : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     const venta = c['Monto venta ($)'];
     const ventaStr = venta && venta !== 'Pendiente de visita' && venta !== 'Sin venta'
       ? `💰 ${fmtPesos(venta)}` : (venta === 'Sin venta' ? '❌ Sin venta' : '');
@@ -602,7 +602,7 @@ function renderTabla(clientes) {
   document.getElementById('tabla-body').innerHTML = clientes.map(c => {
     const st      = c['_status'];
     const lat     = parseFloat(c['Lat']), lng = parseFloat(c['Lng']);
-    const mapsUrl = c['Google Maps'] || (lat&&lng?`https://www.google.com/maps?q=${lat},${lng}`:'');
+    const mapsUrl = (c['Google Maps'] && c['Google Maps'].startsWith('http')) ? c['Google Maps'] : (lat&&lng ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : '');
     const dias    = parseInt(c['Días sin visita']);
     const venta   = c['Monto venta ($)'];
 
