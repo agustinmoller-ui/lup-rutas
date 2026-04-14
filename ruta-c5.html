@@ -239,6 +239,8 @@
         <option value="">Todos</option>
         <option value="Pendiente">Pendiente</option>
         <option value="Visitado">Visitado</option>
+        <option value="Venta">Venta</option>
+        <option value="No visitado">No visitado</option>
         <option value="No visitado">No visitado</option>
       </select>
       <div class="map-kpis" id="map-kpis"></div>
@@ -249,6 +251,8 @@
     <div class="map-legend">
       <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Pendiente</div>
       <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Visitado</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Venta</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> No visitado</div>
       <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> No visitado</div>
     </div>
   </div>
@@ -321,7 +325,7 @@ const SHEET_ID   = '11jDyNuua6hK5r8ZNiPwWUhA6wzy8RB_x1urMdTjljwk';
 const SHEET_NAME = 'Ruta_C5';
 const MESES      = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const DIAS_FULL  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-const COLORES    = { 'Pendiente':'#2563eb', 'Visitado':'#16a34a', 'No visitado':'#dc2626' };
+const COLORES    = { 'Pendiente':'#2563eb', 'Visitado':'#16a34a', 'Venta':'#7c3aed', 'No visitado':'#dc2626' };
 
 let allData = [];
 let diasSeleccionados = new Set();
@@ -351,10 +355,13 @@ function fmtPesos(val) {
   return '$' + Math.round(n).toLocaleString('es-CL');
 }
 
-// Normalizar status al modelo simplificado: Visitado / No visitado / Pendiente
+// Normalizar status
 function normStatus(st) {
-  if (st === 'OK - Cumplió fecha' || st === 'OK - Otra fecha') return 'Visitado';
-  if (st === 'No visitado') return 'No visitado';
+  if (!st) return 'Pendiente';
+  const s = st.trim();
+  if (s === 'Venta')                                    return 'Venta';
+  if (s === 'Visitado' || s === 'OK - Cumplió fecha' || s === 'OK - Otra fecha') return 'Visitado';
+  if (s === 'No visitado')                              return 'No visitado';
   return 'Pendiente';
 }
 
@@ -411,7 +418,7 @@ function renderCalendario() {
   fechas.forEach(fecha => {
     const cl   = allData.filter(r => r['Fecha'] === fecha);
     const prog = cl.length;
-    const vis  = cl.filter(r => r['_status'] === 'Visitado').length;
+    const vis  = cl.filter(r => r['_status'] === 'Visitado' || r['_status'] === 'Venta').length;
     const noV  = cl.filter(r => r['_status'] === 'No visitado').length;
     const esFut = fecha > hoy, esHoy = fecha === hoy;
     const dt   = new Date(fecha + 'T12:00:00');
@@ -475,7 +482,7 @@ function renderMapa() {
   if (filtroSt) lista = lista.filter(r => r['_status'] === filtroSt);
 
   const prog = lista.length;
-  const vis  = lista.filter(r => r['_status'] === 'Visitado').length;
+  const vis  = lista.filter(r => r['_status'] === 'Visitado' || r['_status'] === 'Venta').length;
   const noV  = lista.filter(r => r['_status'] === 'No visitado').length;
   const pend = lista.filter(r => r['_status'] === 'Pendiente').length;
   const pctV = prog > 0 ? Math.round(vis/prog*100) : 0;
@@ -549,7 +556,7 @@ function clientesFiltrados(texto) {
 function renderKpisClientes() {
   const cl    = clientesFiltrados();
   const prog  = cl.length;
-  const vis   = cl.filter(r => r['_status'] === 'Visitado').length;
+  const vis   = cl.filter(r => r['_status'] === 'Visitado' || r['_status'] === 'Venta').length;
   const noV   = cl.filter(r => r['_status'] === 'No visitado').length;
   const pctV  = prog > 0 ? Math.round(vis/prog*100) : 0;
 
@@ -639,7 +646,7 @@ function renderResumen() {
   document.getElementById('resumen-body').innerHTML = fechas.map(fecha => {
     const cl   = allData.filter(r => r['Fecha'] === fecha);
     const prog = cl.length;
-    const vis  = cl.filter(r => r['_status'] === 'Visitado').length;
+    const vis  = cl.filter(r => r['_status'] === 'Visitado' || r['_status'] === 'Venta').length;
     const noV  = cl.filter(r => r['_status'] === 'No visitado').length;
     const pend = cl.filter(r => r['_status'] === 'Pendiente').length;
     const esFut = fecha > hoy;
