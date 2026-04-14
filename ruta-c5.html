@@ -418,14 +418,27 @@ async function cargarDatos() {
 }
 
 async function syncDatos() {
-  // Actualización sin resetear el selector de fecha ni el mapa
   const btn = document.getElementById('btn-sync');
-  btn.textContent = '⏳ Actualizando...';
+  btn.textContent = '⏳ Sincronizando...';
   btn.disabled = true;
   const prevDias = new Set(diasSeleccionados);
   try {
+    // 1) Llamar al backend que actualiza el sheet y devuelve stats
+    const BACKEND = 'https://backend.base44.com/api/apps/69d037d5322815eaf3e3c640/functions/syncRutaC5';
+    const syncRes = await fetch(BACKEND, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!syncRes.ok) throw new Error(`Backend ${syncRes.status}`);
+
+    // 2) Esperar brevemente para que el sheet se actualice
+    await new Promise(r => setTimeout(r, 1500));
+
+    // 3) Leer el sheet actualizado
     allData = await fetchData();
-    // Restaurar selección de días si siguen existiendo
+
+    // Restaurar selección de días
     const fechas = new Set(allData.map(r => r['Fecha']));
     diasSeleccionados = new Set([...prevDias].filter(d => fechas.has(d)));
     if (diasSeleccionados.size === 0) {
@@ -437,7 +450,18 @@ async function syncDatos() {
     btn.textContent = '✅ Listo';
     setTimeout(() => { btn.textContent = '⟳ Actualizar'; btn.disabled = false; }, 2000);
   } catch(e) {
-    btn.textContent = '⚠️ Error';
+    // Fallback: solo leer el sheet
+    try {
+      allData = await fetchData();
+      const fechas = new Set(allData.map(r => r['Fecha']));
+      diasSeleccionados = new Set([...prevDias].filter(d => fechas.has(d)));
+      if (diasSeleccionados.size === 0) {
+        const hoy = hoyISO(), all = [...fechas].sort();
+        diasSeleccionados = new Set(all.includes(hoy) ? [hoy] : [all[0]]);
+      }
+      renderCalendario(); renderMapa(); renderResumen(); renderKpisClientes();
+      btn.textContent = '✅ (solo sheet)';
+    } catch(e2) { btn.textContent = '⚠️ Error'; }
     setTimeout(() => { btn.textContent = '⟳ Actualizar'; btn.disabled = false; }, 3000);
   }
 }
