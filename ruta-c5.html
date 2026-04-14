@@ -202,7 +202,7 @@
   </div>
   <div class="topbar-desc">Campaña de reactivación · clientes con +21 días sin contacto</div>
   <div class="spacer"></div>
-  <button class="sync-btn" onclick="cargarDatos()">⟳ Actualizar</button>
+  <button class="sync-btn" id="btn-sync" onclick="syncDatos()">⟳ Actualizar</button>
 </div>
 
 <div class="tabs">
@@ -355,50 +355,86 @@ function fmtPesos(val) {
   return '$' + Math.round(n).toLocaleString('es-CL');
 }
 
-// Normalizar status
+// Status raw del sheet (para tabla/resumen)
+// _status simplificado (para mapa y conteos)
 function normStatus(st) {
   if (!st) return 'Pendiente';
   const s = st.trim();
-  if (s === 'Venta')                                    return 'Venta';
-  if (s === 'Visitado' || s === 'OK - Cumplió fecha' || s === 'OK - Otra fecha') return 'Visitado';
-  if (s === 'No visitado')                              return 'No visitado';
+  // Mapa/conteos: agrupado
+  if (s === 'Venta' || s === 'OK - Cumplió fecha') return 'Venta';
+  if (s === 'Visitado' || s === 'OK - Otra fecha') return 'Visitado';
+  if (s === 'No visitado') return 'No visitado';
   return 'Pendiente';
+}
+// Status para mostrar en tabla (etiqueta legible)
+function labelStatus(st) {
+  if (!st) return 'Pendiente';
+  const s = st.trim();
+  if (s === 'Venta')              return '✅ Venta · misma fecha';
+  if (s === 'OK - Cumplió fecha') return '✅ Venta · misma fecha';
+  if (s === 'Visitado')           return '👁 Visitado · misma fecha';
+  if (s === 'OK - Otra fecha')    return '👁 Visitado · otra fecha';
+  if (s === 'No visitado')        return '❌ No visitado';
+  return '⏳ Pendiente';
 }
 
 // ── Carga ─────────────────────────────────────────────────────────────────────
-async function cargarDatos() {
-  document.getElementById('map').innerHTML = '<div class="loading">⏳ Cargando...</div>';
+async function fetchData() {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&t=${Date.now()}`;
+  const resp = await fetch(url);
+  const text = await resp.text();
+  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+  const cols = json.table.cols.map(c => c.label);
+  return json.table.rows.map(row => {
+    const obj = {};
+    cols.forEach((c, i) => {
+      if (!c) return;
+      const cell = row.c[i];
+      if (!cell) { obj[c] = ''; return; }
+      if (cell.v && String(cell.v).startsWith('Date(')) obj[c] = parseGvizDate(cell.v);
+      else obj[c] = (cell.f !== undefined && cell.f !== null) ? cell.f : (cell.v !== null ? cell.v : '');
+    });
+    obj['_status'] = normStatus(obj['Status'] || '');
+    return obj;
+  }).filter(r => r['Cliente']);
+}
+
+async function cargarDatos() {
+  // Primera carga — inicializa todo
+  document.getElementById('map').innerHTML = '<div class="loading">⏳ Cargando...</div>';
   try {
-    const resp = await fetch(url);
-    const text = await resp.text();
-    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
-    const cols = json.table.cols.map(c => c.label);
-
-    allData = json.table.rows.map(row => {
-      const obj = {};
-      cols.forEach((c, i) => {
-        if (!c) return;
-        const cell = row.c[i];
-        if (!cell) { obj[c] = ''; return; }
-        if (cell.v && String(cell.v).startsWith('Date(')) obj[c] = parseGvizDate(cell.v);
-        else obj[c] = (cell.f !== undefined && cell.f !== null) ? cell.f : (cell.v !== null ? cell.v : '');
-      });
-      // Status normalizado
-      obj['_status'] = normStatus(obj['Status'] || '');
-      return obj;
-    }).filter(r => r['Cliente']);
-
+    allData = await fetchData();
     const fechas = [...new Set(allData.map(r => r['Fecha']))].sort();
     const hoy = hoyISO();
     diasSeleccionados = new Set(fechas.includes(hoy) ? [hoy] : [fechas[0]]);
-
-    renderCalendario();
-    renderMapa();
-    renderResumen();
-    renderKpisClientes();
+    renderCalendario(); renderMapa(); renderResumen(); renderKpisClientes();
   } catch(e) {
-    document.getElementById('map').innerHTML = `<div class="empty">⚠️ Error: ${e.message}</div>`;
+    document.getElementById('map').innerHTML = `<div class="empty">⚠️ Error cargando datos: ${e.message}</div>`;
+  }
+}
+
+async function syncDatos() {
+  // Actualización sin resetear el selector de fecha ni el mapa
+  const btn = document.getElementById('btn-sync');
+  btn.textContent = '⏳ Actualizando...';
+  btn.disabled = true;
+  const prevDias = new Set(diasSeleccionados);
+  try {
+    allData = await fetchData();
+    // Restaurar selección de días si siguen existiendo
+    const fechas = new Set(allData.map(r => r['Fecha']));
+    diasSeleccionados = new Set([...prevDias].filter(d => fechas.has(d)));
+    if (diasSeleccionados.size === 0) {
+      const hoy = hoyISO();
+      const all = [...fechas].sort();
+      diasSeleccionados = new Set(all.includes(hoy) ? [hoy] : [all[0]]);
+    }
+    renderCalendario(); renderMapa(); renderResumen(); renderKpisClientes();
+    btn.textContent = '✅ Listo';
+    setTimeout(() => { btn.textContent = '⟳ Actualizar'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = '⚠️ Error';
+    setTimeout(() => { btn.textContent = '⟳ Actualizar'; btn.disabled = false; }, 3000);
   }
 }
 
@@ -628,7 +664,7 @@ function renderTabla(clientes) {
       <td style="color:#64748b;font-size:12px">${c['Dirección']}<br><small>${c['Comuna']}</small></td>
       <td style="text-align:center;font-weight:700;color:${dias>60?'#dc2626':'#d97706'}">${dias||'—'}</td>
       <td style="text-align:center;font-size:12px">${fmtFecha(c['Fecha'])}</td>
-      <td><span class="badge ${BC[st]||'pendiente'}">${st}</span></td>
+      <td><span class="badge ${BC[st]||'pendiente'}">${labelStatus(c['Status']||st)}</span></td>
       <td style="text-align:right">${ventaHtml}</td>
       <td style="text-align:center">${mapsUrl?`<a class="maps-pin" href="${mapsUrl}" target="_blank"><span>📍</span></a>`:'—'}</td>
     </tr>`;
