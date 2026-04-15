@@ -293,6 +293,7 @@
 
   <!-- ══════════ RESUMEN ══════════ -->
   <div id="tab-resumen" style="display:none;">
+    <div id="caluga-hoy"></div>
     <div class="kpi-grid" id="kpi-resumen"></div>
 
     <div class="table-wrap" style="margin-top:12px;">
@@ -679,8 +680,8 @@ function renderKpisClientes() {
 }
 
 function renderTabla(clientes) {
-  const RC = { 'Visitado':'row-visitado', 'No visitado':'row-no-visit', 'Pendiente':'row-pendiente' };
-  const BC = { 'Visitado':'visitado', 'No visitado':'no-visit', 'Pendiente':'pendiente' };
+  const RC = { 'Visitado':'row-visitado', 'Venta':'row-visitado', 'No visitado':'row-no-visit', 'Pendiente':'row-pendiente' };
+  const BC = { 'Visitado':'visitado', 'Venta':'visitado', 'No visitado':'no-visit', 'Pendiente':'pendiente' };
 
   document.getElementById('tabla-body').innerHTML = clientes.map(c => {
     const st      = c['_status'];
@@ -718,6 +719,75 @@ function renderResumen() {
   const fechas = [...new Set(allData.map(r => r['Fecha']))].sort();
   const hoy    = hoyISO();
   let tProg=0, tVis=0, tNoV=0, tPend=0, tVentas=0, tConVenta=0;
+
+  // ── Caluga avance de HOY ──
+  const clHoy    = allData.filter(r => r['Fecha'] === hoy);
+  const hProg    = clHoy.length;
+  const hVis     = clHoy.filter(r => r['_status'] === 'Visitado' || r['_status'] === 'Venta').length;
+  const hVentas  = clHoy.filter(r => r['_status'] === 'Venta').length;
+  const hNoV     = clHoy.filter(r => r['_status'] === 'No visitado').length;
+  const hPend    = clHoy.filter(r => r['_status'] === 'Pendiente').length;
+  const hPct     = hProg > 0 ? Math.round(hVis / hProg * 100) : 0;
+  let   hMonto   = 0;
+  clHoy.forEach(c => {
+    const v = c['Monto venta ($)'];
+    if (v && v !== 'Pendiente de visita' && v !== 'Sin venta') {
+      const n = parseFloat(String(v).replace(/[^0-9.]/g,''));
+      if (!isNaN(n) && n > 0) hMonto += n;
+    }
+  });
+  const hColor = hPct >= 80 ? '#16a34a' : hPct >= 50 ? '#d97706' : '#2563eb';
+
+  const calugarEl = document.getElementById('caluga-hoy');
+  if (calugarEl) {
+    if (hProg > 0) {
+      calugarEl.style.display = '';
+      calugarEl.innerHTML = `
+        <div style="background:white;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.10);padding:18px 22px;margin-bottom:14px;border-left:5px solid ${hColor};">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span style="font-size:18px;">📅</span>
+            <span style="font-weight:800;font-size:16px;">Avance de hoy</span>
+            <span style="font-size:12px;color:#64748b;margin-left:4px;">${new Date(hoy+'T12:00:00').toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'})}</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px;margin-bottom:6px;">
+            <span style="font-size:42px;font-weight:900;color:${hColor};line-height:1">${hPct}%</span>
+            <span style="font-size:13px;color:#64748b;padding-bottom:6px;">cumplimiento</span>
+          </div>
+          <div style="background:#e2e8f0;border-radius:20px;height:8px;overflow:hidden;margin-bottom:14px;">
+            <div style="height:100%;border-radius:20px;background:linear-gradient(90deg,${hColor},${hColor}99);width:${hPct}%;transition:width 0.6s ease;"></div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <div style="background:#dbeafe;border-radius:10px;padding:8px 14px;text-align:center;min-width:70px;">
+              <div style="font-size:20px;font-weight:800;color:#1e40af">${hProg}</div>
+              <div style="font-size:10px;color:#3b82f6;font-weight:600">PROG.</div>
+            </div>
+            <div style="background:#dcfce7;border-radius:10px;padding:8px 14px;text-align:center;min-width:70px;">
+              <div style="font-size:20px;font-weight:800;color:#166534">${hVis}</div>
+              <div style="font-size:10px;color:#16a34a;font-weight:600">VISITADOS</div>
+            </div>
+            <div style="background:#f3e8ff;border-radius:10px;padding:8px 14px;text-align:center;min-width:70px;">
+              <div style="font-size:20px;font-weight:800;color:#6b21a8">${hVentas}</div>
+              <div style="font-size:10px;color:#7c3aed;font-weight:600">VENTAS</div>
+            </div>
+            <div style="background:#fee2e2;border-radius:10px;padding:8px 14px;text-align:center;min-width:70px;">
+              <div style="font-size:20px;font-weight:800;color:#991b1b">${hNoV}</div>
+              <div style="font-size:10px;color:#dc2626;font-weight:600">NO VIS.</div>
+            </div>
+            <div style="background:#f1f5f9;border-radius:10px;padding:8px 14px;text-align:center;min-width:70px;">
+              <div style="font-size:20px;font-weight:800;color:#475569">${hPend}</div>
+              <div style="font-size:10px;color:#64748b;font-weight:600">PEND.</div>
+            </div>
+            ${hMonto > 0 ? `<div style="background:#fef9c3;border-radius:10px;padding:8px 14px;text-align:center;min-width:90px;">
+              <div style="font-size:16px;font-weight:800;color:#854d0e">${fmtPesos(hMonto)}</div>
+              <div style="font-size:10px;color:#a16207;font-weight:600">VENTAS $</div>
+            </div>` : ''}
+          </div>
+        </div>
+      `;
+    } else {
+      calugarEl.style.display = 'none';
+    }
+  }
 
   document.getElementById('resumen-body').innerHTML = fechas.map(fecha => {
     const cl   = allData.filter(r => r['Fecha'] === fecha);
