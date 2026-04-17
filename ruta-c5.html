@@ -703,7 +703,7 @@ function renderTabla(clientes) {
       <td style="font-weight:700;color:#64748b">${c['N°']||''}</td>
       <td style="font-weight:600">${c['Cliente']}</td>
       <td style="color:#64748b;font-size:12px">${c['Dirección']}<br><small>${c['Comuna']}</small></td>
-      <td style="text-align:center;font-weight:700;color:${dias>60?'#dc2626':'#d97706'}">${dias||'—'}</td>
+      <td style="text-align:center;font-weight:700;color:${dias>=21?'#dc2626':dias>0?'#d97706':'#16a34a'}">${dias||'—'}</td>
       <td style="text-align:center;font-size:12px">${fmtFecha(c['Fecha'])}</td>
       <td><span class="badge ${BC[st]||'pendiente'}">${labelStatus(c['Status']||st)}</span></td>
       <td style="text-align:right">${ventaHtml}</td>
