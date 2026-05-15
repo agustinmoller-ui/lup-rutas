@@ -114,6 +114,7 @@ hr.div{border:none;border-top:1px solid #2d3148;margin:7px 0}
   <button class="mode-btn" id="mb-pointer" title="Click para seleccionar" onclick="setMode('pointer')">↖</button>
   <button class="mode-btn" id="mb-box" title="Dibujar rectángulo" onclick="setMode('box')">⬚</button>
   <button class="mode-btn" id="mb-ver" title="Versiones" onclick="document.getElementById('ver-panel').classList.toggle('hidden');renderVersionesPanel()">🕐</button>
+  <button class="mode-btn" title="Centrar mapa en puntos visibles" onclick="fitToVisible()">⊕</button>
 </div>
 
 <div class="info-panel" id="info-panel">
@@ -148,7 +149,7 @@ const DESPUES_DATA = [{"lat": -33.528934, "lng": -70.599594, "camion": "C3", "no
 const CAMIONES=['C1','C2','C3','C4'], SEMANAS=['1','2'], DIAS=['Lunes','Martes','Miercoles','Jueves','Viernes'];
 const COLORS=['#3b82f6','#a855f7','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#f97316'];
 
-let map=L.map('map').setView([-33.47,-70.64],11);
+let map=L.map('map').setView([-33.62,-70.72],10);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; CARTO',subdomains:'abcd',maxZoom:19}).addTo(map);
 let layer=L.layerGroup().addTo(map);
 let vista='antes', slots=[], nextId=0, mode='none';
@@ -224,6 +225,18 @@ function renderMap(){
   });
   slots.forEach(s=>{const el=document.getElementById('cnt-'+s.id);if(el)el.textContent=counts[s.id]||0;});
   updateInfoPanel(counts); updateEditPanel();
+}
+
+function fitToVisible(){
+  const data=getData();
+  const pts=[];
+  data.forEach(p=>{
+    for(const s of slots){
+      if(!s.cams.length&&!s.sems.length&&!s.dias.length) continue;
+      if(matchesSlot(p,s)){pts.push([p.lat,p.lng]);break;}
+    }
+  });
+  if(pts.length>0) map.fitBounds(L.latLngBounds(pts).pad(0.08));
 }
 
 function lighten(hex){
@@ -347,7 +360,7 @@ slots.push({id:nextId++,cams:['C1'],sems:['1'],dias:['Lunes'],color:COLORS[3]});
 slots.push({id:nextId++,cams:['C2'],sems:['1'],dias:['Lunes'],color:COLORS[0]});
 slots.push({id:nextId++,cams:['C3'],sems:['1'],dias:['Lunes'],color:COLORS[2]});
 slots.push({id:nextId++,cams:['C4'],sems:['1'],dias:['Lunes'],color:COLORS[1]});
-renderBar(); renderMap();
+renderBar(); renderMap(); setTimeout(fitToVisible, 100);
 
 // ============================================================
 // SISTEMA DE VERSIONES — localStorage
