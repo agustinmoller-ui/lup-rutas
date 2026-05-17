@@ -115,6 +115,7 @@ hr.div{border:none;border-top:1px solid #2d3148;margin:7px 0}
   <button class="mode-btn" id="mb-box" title="Dibujar rectángulo" onclick="setMode('box')">⬚</button>
   <button class="mode-btn" id="mb-ver" title="Versiones" onclick="document.getElementById('ver-panel').classList.toggle('hidden');renderVersionesPanel()">🕐</button>
   <button class="mode-btn" title="Centrar mapa en puntos visibles" onclick="fitToVisible()">⊕</button>
+  <button class="mode-btn" title="Restablecer todos los cambios" onclick="restablecerCambios()" style="color:#ef4444;font-size:13px">↺</button>
 </div>
 
 <div class="info-panel" id="info-panel">
@@ -441,6 +442,23 @@ function mostrarToast(msg) {
   t.className = 'toast-show';
   setTimeout(() => t.className = '', 2500);
 }
+function restablecerCambios(){
+  if(cambios.length === 0 && !localStorage.getItem('lup_rutas_autosave')){
+    mostrarToast('No hay cambios que restablecer');
+    return;
+  }
+  if(!confirm('¿Seguro que quieres restablecer todo? Se perderán ' + cambios.length + ' cambio(s) pendientes.')){return;}
+  // Resetear workingData desde ANTES_DATA
+  workingData = JSON.parse(JSON.stringify(ANTES_DATA));
+  cambios = [];
+  selected.clear();
+  localStorage.removeItem('lup_rutas_autosave');
+  // Limpiar versiones guardadas también si el usuario quiere
+  updateCambiosPanel();
+  renderMap();
+  mostrarToast('✅ Restablecido a estado original');
+}
+
 // Auto-guardar cada vez que se aplica un cambio
 const _origApplyEdit = applyEdit;
 applyEdit = function() {
