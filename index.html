@@ -72,7 +72,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 
 /* MAPA */
 #map-wrap { flex:1 1 auto; min-height:0; display:flex; overflow:hidden; }
-#map { flex:1 1 auto; min-height:0; width:100%; position:relative; }
+#map { flex:1 1 auto; min-height:0; width:100%; height:100%; position:relative; }
 
 /* PANEL LATERAL SELECCIÓN */
 #sel-panel { width:0; flex:0 0 0; overflow:hidden; transition:width .25s ease; background:#0d1b2a; border-left:1px solid #1a3a5c; display:flex; flex-direction:column; }
@@ -145,7 +145,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 .popup-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; margin:2px 2px 6px 0; color:#fff; }
 .popup-row { margin:2px 0; font-size:11px; color:#333; }
 .popup-btn { display:block; margin-top:6px; text-align:center; background:#3498DB; color:#fff !important; padding:7px; border-radius:8px; text-decoration:none !important; font-weight:700; font-size:12px; }
-#lasso-overlay { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1000; display:none; cursor:crosshair; user-select:none; }
+#lasso-overlay { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1000; display:none; cursor:crosshair; user-select:none; pointer-events:none; }
 #lasso-box { position:absolute; border:2px dashed #9b59b6; background:rgba(155,89,182,0.12); pointer-events:none; display:none; }
 .btn-lasso { background:#0f3460; color:#aaa; }
 .btn-lasso.on { background:#9b59b6; color:#fff; }
@@ -845,9 +845,9 @@ function toggleLasso(){
   btn.className='btn btn-lasso'+(modoLasso?' on':'');
   btn.textContent=modoLasso?'✕ Zona':'⬚ Zona';
   lassoOverlay.style.display=modoLasso?'block':'none';
+  lassoOverlay.style.pointerEvents=modoLasso?'auto':'none';
   lassoBox.style.display='none';
   lassoActive=false;
-  // Deshabilitar/habilitar interacciones del mapa
   if(modoLasso){
     map.dragging.disable();
     map.scrollWheelZoom.disable();
