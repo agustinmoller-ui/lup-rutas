@@ -435,18 +435,19 @@ function cargarDatos(){
   if(!accessToken) return;
   var badge=document.getElementById('sync-badge');
   badge.className='syncing';badge.textContent='⟳ Cargando...';
-  cbCount++;var cbName='__gviz_cb_'+cbCount;
-  window[cbName]=function(resp){
-    var el=document.getElementById('gviz_s');
-    if(el)el.parentNode.removeChild(el);
-    delete window[cbName];
+  var url='https://sheets.googleapis.com/v4/spreadsheets/'+SHEETS_ID+'/values/'+encodeURIComponent(SHEET_RUTAS+'!A:O')+'?t='+Date.now();
+  fetch(url,{headers:{Authorization:'Bearer '+accessToken}})
+  .then(function(r){return r.json();})
+  .then(function(data){
     try{
-      var cols=resp.table.cols,rows=resp.table.rows;
+      var rows=data.values||[];
+      if(!rows.length){badge.className='';badge.textContent='⚠ Sin datos';return;}
+      var header=rows[0];
       colMap={};
-      cols.forEach(function(c,i){if(c.label)colMap[c.label]=i;});
+      header.forEach(function(c,i){if(c)colMap[c.trim()]=i;});
       clientes=[];
-      rows.forEach(function(row,rowIdx){
-        var g=function(name){var i=colMap[name];if(i===undefined||!row.c||!row.c[i])return '';var v=row.c[i].v;return(v!==null&&v!==undefined)?String(v):'';};
+      rows.slice(1).forEach(function(row,rowIdx){
+        var g=function(name){var i=colMap[name];if(i===undefined)return '';return(row[i]||'').toString().trim();};
         var lat=parseFloat(g('Lat')),lng=parseFloat(g('Lng'));
         if(isNaN(lat)||isNaN(lng)||lat===0||lng===0)return;
         clientes.push({rowIdx:rowIdx+2,cod:g('Codigo'),nombre:g('Nombre'),direccion:g('Direccion'),comuna:g('Comuna'),ruta:g('Ruta_Original'),segmento:g('Segmento'),n_compras:parseInt(g('N_Compras'))||0,ticket:parseFloat(g('Ticket_Promedio'))||0,vendedor:g('Vendedor'),camion:g('Camion'),semana:parseInt(g('Semana'))||1,dia:g('Dia'),lat:lat,lng:lng});
@@ -457,10 +458,8 @@ function cargarDatos(){
       renderizar();
     }catch(e){badge.className='';badge.textContent='⚠ Error';console.error(e);}
     if(autoSync)syncTimer=setTimeout(cargarDatos,30000);
-  };
-  var s=document.createElement('script');s.id='gviz_s';
-  s.src='https://docs.google.com/spreadsheets/d/'+SHEETS_ID+'/gviz/tq?tqx=out:json%3BresponseHandler:'+cbName+'&sheet='+SHEET_RUTAS+'&range=A:O&headers=1&t='+Date.now();
-  document.head.appendChild(s);
+  })
+  .catch(function(e){badge.className='';badge.textContent='⚠ Error red';console.error(e);});
 }
 
 // ——— RENDER ———
