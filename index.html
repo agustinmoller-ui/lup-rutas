@@ -795,7 +795,7 @@ function actualizarPanelSel(){
   lista.forEach(function(c){
     var col=COLORES_CAM[c.camion]||'#888';
     var sub=(c.comuna||'')+(c.dia?' · '+c.dia.substring(0,3):'')+(c.semana?' · S'+c.semana:'');
-    html+='<div class="sel-item" onclick="irACliente(''+c.cod+'')">'+
+    html+='<div class="sel-item" onclick="irACliente(&quot;'+c.cod+'&quot;)">'+
       '<div class="sel-item-nombre">'+c.nombre+'</div>'+
       '<div class="sel-item-sub">'+
         '<span class="sel-item-cam" style="background:'+col+'">'+c.camion+'</span>'+
