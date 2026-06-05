@@ -71,7 +71,24 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 .rp-lbl { color:#667; font-size:8px; }
 
 /* MAPA */
+#map-wrap { flex:1 1 auto; min-height:0; display:flex; overflow:hidden; }
 #map { flex:1 1 auto; min-height:0; width:100%; position:relative; }
+
+/* PANEL LATERAL SELECCIÓN */
+#sel-panel { width:0; flex:0 0 0; overflow:hidden; transition:width .25s ease; background:#0d1b2a; border-left:1px solid #1a3a5c; display:flex; flex-direction:column; }
+#sel-panel.open { width:230px; flex:0 0 230px; }
+#sel-panel-header { padding:10px 12px 8px; border-bottom:1px solid #1a3a5c; display:flex; align-items:center; justify-content:space-between; }
+#sel-panel-title { font-size:11px; font-weight:700; color:#9b59b6; text-transform:uppercase; }
+#sel-panel-close { background:none; border:none; color:#aaa; font-size:14px; cursor:pointer; padding:2px 4px; }
+#sel-panel-list { flex:1; overflow-y:auto; padding:4px 0; }
+#sel-panel-list::-webkit-scrollbar { width:4px; }
+#sel-panel-list::-webkit-scrollbar-thumb { background:#1a3a5c; border-radius:4px; }
+.sel-item { padding:7px 12px; border-bottom:1px solid #0f1e30; cursor:pointer; transition:background .15s; }
+.sel-item:hover { background:#0f3460; }
+.sel-item-nombre { font-size:11px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sel-item-sub { font-size:9px; color:#667; margin-top:1px; display:flex; gap:4px; align-items:center; }
+.sel-item-cam { display:inline-block; padding:1px 6px; border-radius:8px; font-size:9px; font-weight:700; color:#fff; }
+#sel-panel-footer { padding:8px 10px; border-top:1px solid #1a3a5c; font-size:10px; color:#667; text-align:center; }
 
 /* BARRA SELECCIÓN */
 #sel-bar { display:none; position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#16213e; border:2px solid #F39C12; border-radius:16px; padding:8px 14px; z-index:1000; box-shadow:0 4px 20px rgba(0,0,0,.7); min-width:280px; max-width:94vw; }
@@ -195,9 +212,19 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
   <div class="rp-stat"><div class="rp-val" id="rp_ticket" style="color:#2ECC71">—</div><div class="rp-lbl">Ticket prom</div></div>
 </div>
 
-<div id="map">
-  <div id="lasso-overlay">
-    <div id="lasso-box"></div>
+<div id="map-wrap">
+  <div id="map">
+    <div id="lasso-overlay">
+      <div id="lasso-box"></div>
+    </div>
+  </div>
+  <div id="sel-panel">
+    <div id="sel-panel-header">
+      <span id="sel-panel-title">Selección</span>
+      <button id="sel-panel-close" onclick="cerrarPanelSel()">✕</button>
+    </div>
+    <div id="sel-panel-list"></div>
+    <div id="sel-panel-footer" id="sel-panel-count"></div>
   </div>
 </div>
 
@@ -610,9 +637,10 @@ function toggleSeleccionar(c){
   var bar=document.getElementById('sel-bar');
   if(n>0){bar.className='visible';document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');}
   else bar.className='';
+  actualizarPanelSel();
   renderizar();
 }
-function cancelarSeleccion(){seleccionados={};modoSeleccion=false;document.getElementById('btn-sel').className='btn btn-sel';document.getElementById('btn-sel').textContent='☑ Seleccionar';document.getElementById('sel-bar').className='';renderizar();}
+function cancelarSeleccion(){seleccionados={};modoSeleccion=false;document.getElementById('btn-sel').className='btn btn-sel';document.getElementById('btn-sel').textContent='☑ Seleccionar';document.getElementById('sel-bar').className='';actualizarPanelSel();renderizar();}
 function aplicarMasivo(campo,valor){
   if(!accessToken)return;
   var lista=Object.values(seleccionados);if(!lista.length)return;
@@ -743,6 +771,68 @@ function setDia(d){
 function toggleCam(cam,id){camsOn[cam]=!camsOn[cam];document.getElementById(id).classList.toggle('on',camsOn[cam]);renderizar();}
 function toggleAutoSync(){autoSync=!autoSync;var el=document.getElementById('sv_auto');el.textContent=autoSync?'AUTO':'OFF';el.style.color=autoSync?'#2ECC71':'#e94560';if(autoSync)cargarDatos();else if(syncTimer)clearTimeout(syncTimer);}
 window.addEventListener('resize',function(){if(map)map.invalidateSize();});
+// ——— PANEL LATERAL SELECCIÓN ———
+var COLORES_CAM={C1:'#E74C3C',C2:'#3498DB',C3:'#2ECC71',C4:'#F39C12'};
+
+function actualizarPanelSel(){
+  var lista=Object.values(seleccionados);
+  var panel=document.getElementById('sel-panel');
+  var listEl=document.getElementById('sel-panel-list');
+  var footer=document.getElementById('sel-panel-footer');
+
+  if(lista.length===0){
+    panel.classList.remove('open');
+    listEl.innerHTML='';
+    return;
+  }
+
+  panel.classList.add('open');
+  setTimeout(function(){if(map)map.invalidateSize();},260);
+
+  // Ordenar por camión luego nombre
+  lista.sort(function(a,b){
+    if(a.camion!==b.camion) return a.camion<b.camion?-1:1;
+    return a.nombre<b.nombre?-1:1;
+  });
+
+  var html='';
+  lista.forEach(function(c){
+    var col=COLORES_CAM[c.camion]||'#888';
+    var sub=(c.comuna||'')+(c.dia?' · '+c.dia.substring(0,3):'')+(c.semana?' · S'+c.semana:'');
+    html+='<div class="sel-item" onclick="irACliente(''+c.cod+'')">'+
+      '<div class="sel-item-nombre">'+c.nombre+'</div>'+
+      '<div class="sel-item-sub">'+
+        '<span class="sel-item-cam" style="background:'+col+'">'+c.camion+'</span>'+
+        '<span>'+sub+'</span>'+
+      '</div>'+
+    '</div>';
+  });
+  listEl.innerHTML=html;
+  footer.textContent=lista.length+' cliente'+(lista.length>1?'s':'')+' seleccionado'+(lista.length>1?'s':'');
+}
+
+function cerrarPanelSel(){
+  document.getElementById('sel-panel').classList.remove('open');
+  setTimeout(function(){if(map)map.invalidateSize();},260);
+}
+
+function irACliente(cod){
+  for(var i=0;i<clientes.length;i++){
+    var c=clientes[i];
+    if(c.cod===cod&&c.lat&&c.lng){
+      map.setView([c.lat,c.lng],16);
+      // abrir popup del marker
+      for(var j=0;j<markers.length;j++){
+        var ll=markers[j].getLatLng();
+        if(Math.abs(ll.lat-c.lat)<0.0001&&Math.abs(ll.lng-c.lng)<0.0001){
+          markers[j].openPopup();break;
+        }
+      }
+      break;
+    }
+  }
+}
+
 // ——— LASSO (selección por arrastre con overlay HTML) ———
 var modoLasso=false;
 var lassoOverlay=document.getElementById('lasso-overlay');
@@ -806,6 +896,7 @@ function lassoSeleccionar(x1,y1,x2,y2){
     document.getElementById('sel-bar').className='visible';
     document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');
   }
+  actualizarPanelSel();
 }
 
 lassoOverlay.addEventListener('mousedown',function(e){
