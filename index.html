@@ -746,35 +746,18 @@ function toggleLasso(){
   var btn=document.getElementById('btn-lasso');
   btn.className='btn btn-lasso'+(modoLasso?' on':'');
   btn.textContent=modoLasso?'✕ Zona':'⬚ Zona';
-  if(modoLasso){
-    map.dragging.disable();
-    map.getContainer().style.cursor='crosshair';
-  } else {
-    map.dragging.enable();
-    map.getContainer().style.cursor='';
+  map.dragging[modoLasso?'disable':'enable']();
+  map.getContainer().style.cursor=modoLasso?'crosshair':'';
+  if(!modoLasso){
     if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
     lassoStart=null; lassoActivo=false;
   }
 }
 
-map.on('mousedown',function(e){
-  if(!modoLasso) return;
-  lassoActivo=true;
-  lassoStart=e.latlng;
-  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
-});
-
-map.on('mousemove',function(e){
-  if(!modoLasso||!lassoActivo||!lassoStart) return;
-  var b=L.latLngBounds(lassoStart,e.latlng);
-  if(lassoRect) map.removeLayer(lassoRect);
-  lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.1,dashArray:'5,4'});
-  lassoRect.addTo(map);
-  // Selección en tiempo real mientras arrastra
+function lassoSeleccionar(bounds){
   clientes.forEach(function(c){
     if(!c.lat||!c.lng) return;
-    if(!b.contains([c.lat,c.lng])) return;
-    // solo los visibles según filtros actuales
+    if(!bounds.contains([c.lat,c.lng])) return;
     var enSem=(semana===0||c.semana===semana);
     var enDia=(dia==='todos'||c.dia===dia);
     var enCam=camsOn[c.camion];
@@ -782,54 +765,69 @@ map.on('mousemove',function(e){
   });
   var n=Object.keys(seleccionados).length;
   var bar=document.getElementById('sel-bar');
-  if(n>0){bar.className='visible';document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');}
-  renderizar();
-});
+  if(n>0){
+    bar.className='visible';
+    document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');
+  }
+}
 
-map.on('mouseup',function(e){
-  if(!modoLasso||!lassoActivo) return;
-  lassoActivo=false;
-  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
-  lassoStart=null;
-  // Mantener modo lasso para seguir seleccionando
-});
+// Mouse events — usamos el container directamente para evitar conflictos con Leaflet
+(function(){
+  var container=map.getContainer();
 
-// Touch support para móvil
-map.getContainer().addEventListener('touchstart',function(e){
-  if(!modoLasso) return;
-  var t=e.touches[0], rect=map.getContainer().getBoundingClientRect();
-  lassoStart=map.containerPointToLatLng(L.point(t.clientX-rect.left,t.clientY-rect.top));
-  lassoActivo=true;
-},{passive:true});
-
-map.getContainer().addEventListener('touchmove',function(e){
-  if(!modoLasso||!lassoActivo||!lassoStart) return;
-  var t=e.touches[0], rect=map.getContainer().getBoundingClientRect();
-  var ll=map.containerPointToLatLng(L.point(t.clientX-rect.left,t.clientY-rect.top));
-  var b=L.latLngBounds(lassoStart,ll);
-  if(lassoRect) map.removeLayer(lassoRect);
-  lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.1,dashArray:'5,4'});
-  lassoRect.addTo(map);
-  clientes.forEach(function(c){
-    if(!c.lat||!c.lng) return;
-    if(!b.contains([c.lat,c.lng])) return;
-    var enSem=(semana===0||c.semana===semana);
-    var enDia=(dia==='todos'||c.dia===dia);
-    var enCam=camsOn[c.camion];
-    if(enSem&&enDia&&enCam) seleccionados[c.cod]=c;
+  container.addEventListener('mousedown',function(e){
+    if(!modoLasso) return;
+    e.preventDefault();
+    lassoActivo=true;
+    lassoStart=map.containerPointToLatLng(L.point(e.offsetX,e.offsetY));
+    if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
   });
-  var n=Object.keys(seleccionados).length;
-  var bar=document.getElementById('sel-bar');
-  if(n>0){bar.className='visible';document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');}
-  renderizar();
-},{passive:true});
 
-map.getContainer().addEventListener('touchend',function(e){
-  if(!modoLasso) return;
-  lassoActivo=false;
-  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
-  lassoStart=null;
-},{passive:true});
+  container.addEventListener('mousemove',function(e){
+    if(!modoLasso||!lassoActivo||!lassoStart) return;
+    var cur=map.containerPointToLatLng(L.point(e.offsetX,e.offsetY));
+    var b=L.latLngBounds(lassoStart,cur);
+    if(lassoRect) map.removeLayer(lassoRect);
+    lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.12,dashArray:'6,4'});
+    lassoRect.addTo(map);
+    lassoSeleccionar(b);
+  });
+
+  container.addEventListener('mouseup',function(e){
+    if(!modoLasso||!lassoActivo) return;
+    lassoActivo=false;
+    if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+    lassoStart=null;
+    renderizar();
+  });
+
+  // Touch
+  container.addEventListener('touchstart',function(e){
+    if(!modoLasso) return;
+    var t=e.touches[0], r=container.getBoundingClientRect();
+    lassoStart=map.containerPointToLatLng(L.point(t.clientX-r.left,t.clientY-r.top));
+    lassoActivo=true;
+  },{passive:true});
+
+  container.addEventListener('touchmove',function(e){
+    if(!modoLasso||!lassoActivo||!lassoStart) return;
+    var t=e.touches[0], r=container.getBoundingClientRect();
+    var cur=map.containerPointToLatLng(L.point(t.clientX-r.left,t.clientY-r.top));
+    var b=L.latLngBounds(lassoStart,cur);
+    if(lassoRect) map.removeLayer(lassoRect);
+    lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.12,dashArray:'6,4'});
+    lassoRect.addTo(map);
+    lassoSeleccionar(b);
+  },{passive:true});
+
+  container.addEventListener('touchend',function(){
+    if(!modoLasso) return;
+    lassoActivo=false;
+    if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+    lassoStart=null;
+    renderizar();
+  },{passive:true});
+})();
 
 </script>
 </body>
