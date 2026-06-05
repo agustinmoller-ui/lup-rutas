@@ -43,6 +43,8 @@ h1 span { color:#e94560; }
 .btn-cam { color:#fff; opacity:.3; border:none; cursor:pointer; }
 .btn-cam.on { opacity:1; }
 .btn-sel { background:#0f3460; color:#aaa; }
+.btn-dia { background:#0f3460; color:#aaa; }
+.btn-dia.on { background:#e94560; color:#fff; }
 .btn-sel.on { background:#F39C12; color:#000; }
 select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20px; padding:5px 8px; font-size:11px; }
 #wrap-busq { position:relative; flex:1; min-width:100px; }
@@ -126,6 +128,9 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 .popup-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; margin:2px 2px 6px 0; color:#fff; }
 .popup-row { margin:2px 0; font-size:11px; color:#333; }
 .popup-btn { display:block; margin-top:6px; text-align:center; background:#3498DB; color:#fff !important; padding:7px; border-radius:8px; text-decoration:none !important; font-weight:700; font-size:12px; }
+#lasso-rect { pointer-events:none; }
+.btn-lasso { background:#0f3460; color:#aaa; }
+.btn-lasso.on { background:#9b59b6; color:#fff; }
 .popup-edit { display:block; margin-top:5px; text-align:center; padding:7px; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer; border:none; width:100%; }
 
 /* REQUEST banner */
@@ -152,19 +157,18 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
     <button class="btn btn-sem on" onclick="setSemana(0)" id="s0">Todas</button>
     <button class="btn btn-sem" onclick="setSemana(1)" id="s1">S1</button>
     <button class="btn btn-sem" onclick="setSemana(2)" id="s2">S2</button>
-    <select onchange="setDia(this.value)">
-      <option value="todos">Todos los días</option>
-      <option value="Lunes">Lunes</option>
-      <option value="Martes">Martes</option>
-      <option value="Miercoles">Miércoles</option>
-      <option value="Jueves">Jueves</option>
-      <option value="Viernes">Viernes</option>
-    </select>
+    <button class="btn btn-dia on" id="d-todos" onclick="setDia('todos')">Todos</button>
+    <button class="btn btn-dia" id="d-Lunes" onclick="setDia('Lunes')">Lun</button>
+    <button class="btn btn-dia" id="d-Martes" onclick="setDia('Martes')">Mar</button>
+    <button class="btn btn-dia" id="d-Miercoles" onclick="setDia('Miercoles')">Mié</button>
+    <button class="btn btn-dia" id="d-Jueves" onclick="setDia('Jueves')">Jue</button>
+    <button class="btn btn-dia" id="d-Viernes" onclick="setDia('Viernes')">Vie</button>
     <button class="btn btn-cam on" style="background:#E74C3C" onclick="toggleCam('C1','c1')" id="c1">C1</button>
     <button class="btn btn-cam on" style="background:#3498DB" onclick="toggleCam('C2','c2')" id="c2">C2</button>
     <button class="btn btn-cam on" style="background:#2ECC71" onclick="toggleCam('C3','c3')" id="c3">C3</button>
     <button class="btn btn-cam on" style="background:#F39C12" onclick="toggleCam('C4','c4')" id="c4">C4</button>
     <button class="btn btn-sel" onclick="toggleSeleccion()" id="btn-sel" style="display:none">☑ Seleccionar</button>
+    <button class="btn btn-lasso" onclick="toggleLasso()" id="btn-lasso" style="display:none">⬚ Zona</button>
     <div id="wrap-busq">
       <input id="buscador" type="text" placeholder="🔍 Buscar..." oninput="onBuscar()" onkeydown="navSugerencias(event)" autocomplete="off">
       <div id="sugerencias"></div>
@@ -373,12 +377,14 @@ function actualizarUIAuth(){
     rb.className='role-badge rb-'+userRol;
     btnAdmin.style.display=userRol==='admin'?'inline-block':'none';
     btnSel.style.display=(userRol==='admin'||userRol==='editor_full'||userRol==='editor_parcial')?'inline-block':'none';
+    document.getElementById('btn-lasso').style.display=(userRol==='admin'||userRol==='editor_full'||userRol==='editor_parcial')?'inline-block':'none';
   } else {
     chip.style.display='none';
     btnLogin.style.display='inline-block';
     btnLogout.style.display='none';
     btnAdmin.style.display='none';
     btnSel.style.display='none';
+    document.getElementById('btn-lasso').style.display='none';
   }
   renderizar();
 }
@@ -721,10 +727,110 @@ function cerrarSugerencias(){document.getElementById('sugerencias').style.displa
 
 // ——— CONTROLES ———
 function setSemana(s){semana=s;['s0','s1','s2'].forEach(function(id,i){document.getElementById(id).className='btn btn-sem'+(i===s?' on':'');});renderizar();}
-function setDia(d){dia=d;renderizar();}
+function setDia(d){
+  dia=d;
+  ['todos','Lunes','Martes','Miercoles','Jueves','Viernes'].forEach(function(x){
+    var el=document.getElementById('d-'+x);
+    if(el) el.className='btn btn-dia'+(x===d?' on':'');
+  });
+  renderizar();
+}
 function toggleCam(cam,id){camsOn[cam]=!camsOn[cam];document.getElementById(id).classList.toggle('on',camsOn[cam]);renderizar();}
 function toggleAutoSync(){autoSync=!autoSync;var el=document.getElementById('sv_auto');el.textContent=autoSync?'AUTO':'OFF';el.style.color=autoSync?'#2ECC71':'#e94560';if(autoSync)cargarDatos();else if(syncTimer)clearTimeout(syncTimer);}
 window.addEventListener('resize',function(){if(map)map.invalidateSize();});
+// ——— LASSO (selección por arrastre) ———
+var modoLasso=false, lassoActivo=false, lassoStart=null, lassoRect=null;
+
+function toggleLasso(){
+  modoLasso=!modoLasso;
+  var btn=document.getElementById('btn-lasso');
+  btn.className='btn btn-lasso'+(modoLasso?' on':'');
+  btn.textContent=modoLasso?'✕ Zona':'⬚ Zona';
+  if(modoLasso){
+    map.dragging.disable();
+    map.getContainer().style.cursor='crosshair';
+  } else {
+    map.dragging.enable();
+    map.getContainer().style.cursor='';
+    if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+    lassoStart=null; lassoActivo=false;
+  }
+}
+
+map.on('mousedown',function(e){
+  if(!modoLasso) return;
+  lassoActivo=true;
+  lassoStart=e.latlng;
+  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+});
+
+map.on('mousemove',function(e){
+  if(!modoLasso||!lassoActivo||!lassoStart) return;
+  var b=L.latLngBounds(lassoStart,e.latlng);
+  if(lassoRect) map.removeLayer(lassoRect);
+  lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.1,dashArray:'5,4'});
+  lassoRect.addTo(map);
+  // Selección en tiempo real mientras arrastra
+  clientes.forEach(function(c){
+    if(!c.lat||!c.lng) return;
+    if(!b.contains([c.lat,c.lng])) return;
+    // solo los visibles según filtros actuales
+    var enSem=(semana===0||c.semana===semana);
+    var enDia=(dia==='todos'||c.dia===dia);
+    var enCam=camsOn[c.camion];
+    if(enSem&&enDia&&enCam) seleccionados[c.cod]=c;
+  });
+  var n=Object.keys(seleccionados).length;
+  var bar=document.getElementById('sel-bar');
+  if(n>0){bar.className='visible';document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');}
+  renderizar();
+});
+
+map.on('mouseup',function(e){
+  if(!modoLasso||!lassoActivo) return;
+  lassoActivo=false;
+  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+  lassoStart=null;
+  // Mantener modo lasso para seguir seleccionando
+});
+
+// Touch support para móvil
+map.getContainer().addEventListener('touchstart',function(e){
+  if(!modoLasso) return;
+  var t=e.touches[0], rect=map.getContainer().getBoundingClientRect();
+  lassoStart=map.containerPointToLatLng(L.point(t.clientX-rect.left,t.clientY-rect.top));
+  lassoActivo=true;
+},{passive:true});
+
+map.getContainer().addEventListener('touchmove',function(e){
+  if(!modoLasso||!lassoActivo||!lassoStart) return;
+  var t=e.touches[0], rect=map.getContainer().getBoundingClientRect();
+  var ll=map.containerPointToLatLng(L.point(t.clientX-rect.left,t.clientY-rect.top));
+  var b=L.latLngBounds(lassoStart,ll);
+  if(lassoRect) map.removeLayer(lassoRect);
+  lassoRect=L.rectangle(b,{color:'#9b59b6',weight:2,fillOpacity:0.1,dashArray:'5,4'});
+  lassoRect.addTo(map);
+  clientes.forEach(function(c){
+    if(!c.lat||!c.lng) return;
+    if(!b.contains([c.lat,c.lng])) return;
+    var enSem=(semana===0||c.semana===semana);
+    var enDia=(dia==='todos'||c.dia===dia);
+    var enCam=camsOn[c.camion];
+    if(enSem&&enDia&&enCam) seleccionados[c.cod]=c;
+  });
+  var n=Object.keys(seleccionados).length;
+  var bar=document.getElementById('sel-bar');
+  if(n>0){bar.className='visible';document.getElementById('sel-title').textContent=n+' cliente'+(n>1?'s':'')+' seleccionado'+(n>1?'s':'');}
+  renderizar();
+},{passive:true});
+
+map.getContainer().addEventListener('touchend',function(e){
+  if(!modoLasso) return;
+  lassoActivo=false;
+  if(lassoRect){map.removeLayer(lassoRect);lassoRect=null;}
+  lassoStart=null;
+},{passive:true});
+
 </script>
 </body>
 </html>
