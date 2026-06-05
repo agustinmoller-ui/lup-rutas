@@ -71,7 +71,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 .rp-lbl { color:#667; font-size:8px; }
 
 /* MAPA */
-#map { flex:1 1 auto; min-height:0; width:100%; }
+#map { flex:1 1 auto; min-height:0; width:100%; position:relative; }
 
 /* BARRA SELECCIÓN */
 #sel-bar { display:none; position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#16213e; border:2px solid #F39C12; border-radius:16px; padding:8px 14px; z-index:1000; box-shadow:0 4px 20px rgba(0,0,0,.7); min-width:280px; max-width:94vw; }
@@ -757,6 +757,20 @@ function toggleLasso(){
   lassoOverlay.style.display=modoLasso?'block':'none';
   lassoBox.style.display='none';
   lassoActive=false;
+  // Deshabilitar/habilitar interacciones del mapa
+  if(modoLasso){
+    map.dragging.disable();
+    map.scrollWheelZoom.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoom.disable();
+    map.boxZoom.disable();
+  } else {
+    map.dragging.enable();
+    map.scrollWheelZoom.enable();
+    map.doubleClickZoom.enable();
+    map.touchZoom.enable();
+    map.boxZoom.enable();
+  }
 }
 
 function lassoGetPos(e){
