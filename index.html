@@ -73,8 +73,8 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 /* MAPA */
 #map { flex:1 1 auto; min-height:0; width:100%; position:relative; }
 
-/* PANEL LATERAL SELECCIÓN — fixed, desliza desde la derecha */
-#sel-panel { position:fixed; top:0; right:-250px; width:240px; height:100%; background:#0d1b2a; border-left:2px solid #9b59b6; display:flex; flex-direction:column; z-index:1500; transition:right .25s ease; box-shadow:-4px 0 20px rgba(0,0,0,.6); }
+/* PANEL LATERAL SELECCIÓN — absolute dentro del mapa */
+#sel-panel { position:absolute; top:0; right:-250px; width:240px; height:100%; background:#0d1b2a; border-left:2px solid #9b59b6; display:flex; flex-direction:column; z-index:1500; transition:right .25s ease; box-shadow:-4px 0 20px rgba(0,0,0,.6); }
 #sel-panel.open { right:0; }
 #sel-panel-header { padding:10px 12px 8px; border-bottom:1px solid #1a3a5c; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
 #sel-panel-title { font-size:11px; font-weight:700; color:#9b59b6; text-transform:uppercase; }
@@ -215,14 +215,14 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
   <div id="lasso-overlay">
     <div id="lasso-box"></div>
   </div>
-</div>
-<div id="sel-panel">
-  <div id="sel-panel-header">
-    <span id="sel-panel-title">Selección</span>
-    <button id="sel-panel-close" onclick="cerrarPanelSel()">✕</button>
+  <div id="sel-panel">
+    <div id="sel-panel-header">
+      <span id="sel-panel-title">✔ Selección</span>
+      <button id="sel-panel-close" onclick="cerrarPanelSel()">✕</button>
+    </div>
+    <div id="sel-panel-list"></div>
+    <div id="sel-panel-footer"></div>
   </div>
-  <div id="sel-panel-list"></div>
-  <div id="sel-panel-footer"></div>
 </div>
 
 <!-- Barra selección múltiple -->
