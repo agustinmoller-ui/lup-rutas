@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>LUP — Clientes</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #4f6ef7;
+    --accent2: #7c3aed;
+    --text: #e8eaf6;
+    --text2: #8b90b0;
+    --ok: #3b82f6;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --critical: #7f1d1d;
+    --critical-text: #fca5a5;
+    --gray: #64748b;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* NAV */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 16px; height: 56px; flex-shrink: 0;
+    z-index: 1000;
+  }
+  .nav-logo { font-weight: 700; font-size: 18px; color: var(--accent); letter-spacing: -0.5px; margin-right: 8px; }
+  .nav-tabs { display: flex; gap: 4px; flex: 1; }
+  .tab-btn {
+    padding: 7px 14px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+    font-size: 13px; font-weight: 500; font-family: inherit;
+    background: transparent; color: var(--text2); transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn.active { background: var(--accent); color: white; }
+  .tab-btn:hover:not(.active) { background: var(--surface2); color: var(--text); }
+  .nav-right { display: flex; align-items: center; gap: 8px; }
+  .role-badge {
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 20px; font-size: 12px; color: var(--text2);
+  }
+
+  /* MAIN */
+  .main { flex: 1; overflow: hidden; position: relative; }
+  .view { display: none; height: 100%; }
+  .view.active { display: flex; flex-direction: column; }
+
+  /* FILTER BAR */
+  .filter-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .filter-bar input, .filter-bar select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color 0.2s;
+  }
+  .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+  .filter-bar input { min-width: 200px; }
+  .filter-bar select { cursor: pointer; }
+  .filter-bar select option { background: var(--surface2); }
+
+  /* SWITCH */
+  .switch-wrap { display: flex; align-items: center; gap: 8px; }
+  .switch-label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .switch {
+    position: relative; width: 40px; height: 22px; cursor: pointer;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 11px; transition: 0.3s;
+  }
+  .slider:before {
+    content: ""; position: absolute;
+    width: 16px; height: 16px; left: 2px; top: 2px;
+    background: var(--text2); border-radius: 50%; transition: 0.3s;
+  }
+  input:checked + .slider { background: var(--accent); border-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(18px); background: white; }
+
+  /* MAP */
+  #map { flex: 1; }
+  .leaflet-popup-content-wrapper {
+    background: var(--surface) !important; border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important; box-shadow: var(--shadow) !important; padding: 0 !important;
+  }
+  .leaflet-popup-tip { background: var(--surface) !important; }
+  .popup-inner { padding: 14px 16px; min-width: 220px; }
+  .popup-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; color: var(--text); }
+  .popup-addr { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+  .popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+  .popup-stat { background: var(--surface2); border-radius: 6px; padding: 6px 8px; }
+  .popup-stat-label { font-size: 10px; color: var(--text2); margin-bottom: 2px; }
+  .popup-stat-val { font-size: 13px; font-weight: 600; }
+  .popup-actions { display: flex; gap: 6px; }
+  .popup-btn {
+    flex: 1; padding: 8px; border-radius: 6px; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 600; font-family: inherit; transition: opacity 0.2s;
+  }
+  .popup-btn:hover { opacity: 0.85; }
+  .popup-btn-maps { background: var(--accent); color: white; }
+  .popup-btn-hist { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* LEGEND */
+  .map-legend {
+    position: absolute; bottom: 24px; left: 16px; z-index: 999;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+    box-shadow: var(--shadow);
+  }
+  .legend-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* MAP STATS */
+  .map-stats {
+    position: absolute; top: 70px; right: 16px; z-index: 999;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .map-stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px; min-width: 140px;
+    box-shadow: var(--shadow);
+  }
+  .map-stat-card .num { font-size: 22px; font-weight: 700; }
+  .map-stat-card .lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* LIST VIEW */
+  .list-view-inner { flex: 1; overflow-y: auto; padding: 16px; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface2); position: sticky; top: 0; z-index: 10; }
+  th { padding: 11px 14px; text-align: left; font-weight: 600; color: var(--text2); font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; }
+  th:hover { color: var(--text); }
+  td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: var(--surface2); }
+  .badge {
+    display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  }
+  .badge-ok { background: rgba(59,130,246,0.2); color: #60a5fa; }
+  .badge-green { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .badge-yellow { background: rgba(234,179,8,0.2); color: #fbbf24; }
+  .badge-red { background: rgba(239,68,68,0.2); color: #f87171; }
+  .badge-critical { background: rgba(127,29,29,0.4); color: #fca5a5; }
+  .badge-gray { background: rgba(100,116,139,0.2); color: #94a3b8; }
+  .link-btn { color: var(--accent); text-decoration: none; font-size: 12px; }
+  .link-btn:hover { text-decoration: underline; }
+  .hist-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    font-family: inherit; transition: background 0.2s;
+  }
+  .hist-btn:hover { background: var(--border); }
+
+  /* CALUGAS */
+  .calugas-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 16px; flex-shrink: 0; }
+  .caluga {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 20px; flex: 1; min-width: 140px;
+    position: relative; overflow: hidden;
+  }
+  .caluga::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .caluga.ok::before { background: var(--ok); }
+  .caluga.green::before { background: var(--green); }
+  .caluga.yellow::before { background: var(--yellow); }
+  .caluga.red::before { background: var(--red); }
+  .caluga.critical::before { background: #991b1b; }
+  .caluga-num { font-size: 28px; font-weight: 700; margin-bottom: 2px; }
+  .caluga-label { font-size: 12px; color: var(--text2); }
+  .caluga-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .caluga-lost { font-size: 13px; font-weight: 600; margin-top: 6px; }
+
+  /* HISTORIAL MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); width: 100%; max-width: 700px;
+    max-height: 90vh; display: flex; flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+  .modal-header {
+    padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
+  }
+  .modal-title { font-size: 16px; font-weight: 700; }
+  .modal-sub { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .modal-close {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); width: 32px; height: 32px; border-radius: 8px;
+    cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .modal-body { overflow-y: auto; padding: 20px 24px; flex: 1; }
+  .modal-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .modal-stat { background: var(--surface2); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .modal-stat-val { font-size: 20px; font-weight: 700; }
+  .modal-stat-lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* DASHBOARD */
+  .dashboard-inner { flex: 1; overflow-y: auto; padding: 16px; }
+  .dash-calugas { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .dash-caluga {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .dash-caluga-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  .dash-caluga-num { font-size: 26px; font-weight: 700; }
+  .dash-caluga-meta { font-size: 12px; margin-top: 4px; }
+  .meta-ok { color: var(--green); }
+  .meta-bad { color: var(--red); }
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width 0.6s; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  }
+  .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+
+  /* ADMIN */
+  .admin-inner { flex: 1; overflow-y: auto; padding: 16px; }
+  .section-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section-badge { background: var(--red); color: white; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+  .alert-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .alert-icon { font-size: 20px; flex-shrink: 0; }
+  .alert-info { flex: 1; }
+  .alert-name { font-weight: 600; font-size: 14px; }
+  .alert-detail { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .alert-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+  .config-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .config-label { font-size: 13px; color: var(--text2); }
+  .config-input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;
+    width: 80px; outline: none;
+  }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* LOADING */
+  .loading-overlay {
+    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  }
+  .loading-logo { font-size: 32px; font-weight: 800; color: var(--accent); letter-spacing: -1px; }
+  .loading-bar { width: 200px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .loading-progress { height: 100%; background: var(--accent); border-radius: 2px; animation: load 1.5s ease-in-out infinite; }
+  @keyframes load { 0%{width:0%} 50%{width:70%} 100%{width:100%} }
+  .loading-text { font-size: 13px; color: var(--text2); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+  .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+
+  @media(max-width:600px){
+    .tab-btn { padding: 6px 10px; font-size: 12px; }
+    .nav-logo { font-size: 16px; }
+    .map-stats { display: none; }
+    .modal-stats { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-logo">LUP</div>
+  <div class="loading-bar"><div class="loading-progress"></div></div>
+  <div class="loading-text">Cargando clientes...</div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">LUP</div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="showView('map')">🗺️ Mapa</button>
+    <button class="tab-btn" onclick="showView('list')">📋 Lista</button>
+    <button class="tab-btn" onclick="showView('alerts')">🔔 Alertas</button>
+    <button class="tab-btn" onclick="showView('dashboard')">📊 Ventas</button>
+    <button class="tab-btn admin-only" onclick="showView('admin')">🔐 Admin</button>
+  </div>
+  <div class="nav-right">
+    <div class="role-badge" id="role-badge">Admin</div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ===== MAP VIEW ===== -->
+  <div class="view active" id="view-map" style="position:relative;">
+    <div class="filter-bar">
+      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()">
+      <select id="map-comuna" onchange="filterMap()"><option value="">Todas las comunas</option></select>
+      <select id="map-status" onchange="filterMap()">
+        <option value="">Todos los estados</option>
+        <option value="ok">🔵 OK (≥5 días)</option>
+        <option value="green">🟢 Verde (0-4)</option>
+        <option value="yellow">🟡 Amarillo (-1 a -5)</option>
+        <option value="red">🔴 Rojo (-6 a -10)</option>
+        <option value="critical">⚫ Crítico (&lt;-10)</option>
+        <option value="nodata">⚪ Sin datos</option>
+        <option value="noseg">🔘 Sin seguimiento</option>
+      </select>
+      <select id="map-vendedor" onchange="filterMap()"><option value="">Todos los vendedores</option></select>
+      <div class="switch-wrap">
+        <span class="switch-label">Solo seguimiento</span>
+        <label class="switch">
+          <input type="checkbox" id="switch-seguimiento" checked onchange="toggleTodos(this)">
+          <span class="slider"></span>
+        </label>
+        <span class="switch-label">Todos</span>
+      </div>
+    </div>
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="legend-title">Días faltantes</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div>OK ≥5 días</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#22c55e"></div>Verde 0–4</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#eab308"></div>Amarillo -1 a -5</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Rojo -6 a -10</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#7f1d1d"></div>Crítico &lt;-10</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#64748b"></div>Sin datos</div>
+    </div>
+    <div class="map-stats" id="map-stats"></div>
+  </div>
+
+  <!-- ===== LIST VIEW ===== -->
+  <div class="view" id="view-list">
+    <div class="filter-bar">
+      <input type="text" id="list-search" placeholder="🔍 Buscar..." oninput="renderList()">
+      <select id="list-comuna" onchange="renderList()"><option value="">Todas las comunas</option></select>
+      <select id="list-status" onchange="renderList()">
+        <option value="">Todos los estados</option>
+        <option value="ok">🔵 OK</option>
+        <option value="green">🟢 Verde</option>
+        <option value="yellow">🟡 Amarillo</option>
+        <option value="red">🔴 Rojo</option>
+        <option value="critical">⚫ Crítico</option>
+      </select>
+      <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
+      <div class="switch-wrap">
+        <span class="switch-label">Seguimiento</span>
+        <label class="switch">
+          <input type="checkbox" id="list-switch" checked onchange="renderList()">
+          <span class="slider"></span>
+        </label>
+        <span class="switch-label">Todos</span>
+      </div>
+    </div>
+    <div class="calugas-row" id="list-calugas"></div>
+    <div class="list-view-inner">
+      <div class="table-wrap">
+        <table id="main-table">
+          <thead>
+            <tr>
+              <th onclick="sortList('nombre')">Nombre ↕</th>
+              <th onclick="sortList('comuna')">Comuna ↕</th>
+              <th onclick="sortList('ultimaVisita')">Última Visita ↕</th>
+              <th onclick="sortList('diasSinContacto')">Días sin contacto ↕</th>
+              <th onclick="sortList('diasFaltantes')">Estado ↕</th>
+              <th onclick="sortList('frecuenciaIdeal')">Frecuencia ↕</th>
+              <th onclick="sortList('ticketPromedio')">Ticket Prom. ↕</th>
+              <th>Vendedor</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="list-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ALERTS VIEW ===== -->
+  <div class="view" id="view-alerts">
+    <div class="filter-bar">
+      <div class="config-label">Alertar si sin visita más de</div>
+      <input type="number" class="config-input" id="alert-dias" value="30" min="1" onchange="renderAlerts()">
+      <div class="config-label">días</div>
+      <div class="config-label" style="margin-left:16px">Sin venta en últimas</div>
+      <input type="number" class="config-input" id="alert-visitas-sin-venta" value="3" min="1" onchange="renderAlerts()">
+      <div class="config-label">visitas</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px;" id="alerts-body"></div>
+  </div>
+
+  <!-- ===== DASHBOARD VIEW ===== -->
+  <div class="view" id="view-dashboard">
+    <div class="filter-bar">
+      <select id="dash-vendedor" onchange="renderDashboard()"><option value="">Todos los vendedores</option></select>
+      <select id="dash-comuna" onchange="renderDashboard()"><option value="">Todas las comunas</option></select>
+      <input type="text" id="dash-search" placeholder="🔍 Cliente..." oninput="renderDashboard()" style="min-width:150px">
+      <input type="date" id="dash-desde" onchange="renderDashboard()">
+      <input type="date" id="dash-hasta" onchange="renderDashboard()">
+      <button onclick="resetDashDates()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:7px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:inherit;">Limpiar</button>
+    </div>
+    <div class="dashboard-inner">
+      <div class="dash-calugas" id="dash-calugas"></div>
+      <div class="chart-card">
+        <div class="chart-title">Ventas por día (últimos 30 días)</div>
+        <canvas id="chart-ventas" height="80"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Top 10 clientes por venta</div>
+        <canvas id="chart-clientes" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ADMIN VIEW ===== -->
+  <div class="view" id="view-admin">
+    <div class="admin-inner">
+      <!-- GPS anomalías -->
+      <div class="section-title">
+        📍 Visitas con distancia anómala
+        <span class="section-badge" id="gps-count">0</span>
+      </div>
+      <div class="config-row">
+        <span class="config-label">Mostrar visitas a más de</span>
+        <input type="number" class="config-input" id="gps-threshold" value="2" min="0.1" step="0.1" onchange="renderAdmin()">
+        <span class="config-label">km del cliente</span>
+      </div>
+      <div id="gps-list"></div>
+
+      <div style="height:32px"></div>
+
+      <!-- Solicitudes de baja -->
+      <div class="section-title">
+        🗑️ Solicitudes de baja
+        <span class="section-badge" id="baja-count">0</span>
+      </div>
+      <div id="baja-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- HISTORIAL MODAL -->
+<div class="modal-overlay" id="modal" style="display:none" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-name">—</div>
+        <div class="modal-sub" id="modal-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-stats" id="modal-stats"></div>
+      <div class="chart-card" style="margin-bottom:16px">
+        <div class="chart-title">Historial de visitas y compras</div>
+        <canvas id="chart-hist" height="120"></canvas>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Fecha</th><th>Tipo</th><th>Vendedor</th><th>Monto</th><th>Distancia</th>
+          </tr></thead>
+          <tbody id="modal-hist-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const SHEET_ID = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
+const META_MENSUAL = 2000000;
+let mostrarTodos = false; // switch: seguimiento vs todos
+
+// ============================================================
+// STATE
+// ============================================================
+let seguimientoData = [];  // Clientes seguimiento
+let visitasData = [];       // Todas las visitas
+let allClientsMap = {};     // Mapa de todos los clientes únicos desde Visitas
+let map = null;
+let markers = [];
+let currentSort = { col: 'diasFaltantes', asc: true };
+let chartVentas = null, chartClientes = null, chartHist = null;
+let ROLE = 'admin'; // 'admin' | 'vendedor'
+
+// ============================================================
+// COLORS
+// ============================================================
+function getStatusFromDias(dias, enSeguimiento) {
+  if (!enSeguimiento) return 'noseg';
+  if (dias === null || dias === undefined || dias === '') return 'nodata';
+  const d = parseFloat(dias);
+  if (isNaN(d)) return 'nodata';
+  if (d >= 5) return 'ok';
+  if (d >= 0) return 'green';
+  if (d >= -5) return 'yellow';
+  if (d >= -10) return 'red';
+  return 'critical';
+}
+
+const STATUS_COLORS = {
+  ok: '#3b82f6',
+  green: '#22c55e',
+  yellow: '#eab308',
+  red: '#ef4444',
+  critical: '#7f1d1d',
+  nodata: '#64748b',
+  noseg: '#374151'  // gris oscuro para clientes fuera de seguimiento
+};
+
+const STATUS_LABELS = {
+  ok: 'OK',
+  green: 'Verde',
+  yellow: 'Amarillo',
+  red: 'Rojo',
+  critical: 'Crítico',
+  nodata: 'Sin datos',
+  noseg: 'Sin seguimiento'
+};
+
+// ============================================================
+// LOAD DATA
+// ============================================================
+let rutasData = []; // Todos los clientes del borrador de rutas
+
+async function loadData() {
+  try {
+    // Intentar cargar desde cache del backend primero (rápido)
+    const data = await loadFromBackend();
+    seguimientoData = data.seguimiento || [];
+    rutasData = data.rutas || [];
+    visitasData = [];
+    
+    buildAllClientsMap();
+    initFilters();
+    initMap();
+    renderMapMarkers();
+    renderList();
+    renderAlerts();
+    renderDashboard();
+    renderAdmin();
+    
+    document.getElementById('loading').style.display = 'none';
+  } catch(e) {
+    console.error('Error loadData:', e);
+    const isAuthError = e.message.includes('Google Identity') || e.message.includes('access_denied');
+    document.getElementById('loading').innerHTML = `
+      <div style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:16px">⚠️</div>
+        <div style="color:#e8eaf6;font-size:16px;font-weight:600;margin-bottom:8px">Error al cargar datos</div>
+        <div style="color:#8b90b0;font-size:13px;max-width:300px">Error: ${e.message}</div>
+        <button onclick="loadData()" style="margin-top:20px;background:#4f6ef7;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px">Reintentar</button>
+      </div>`;
+  }
+}
+
+// Carga datos desde función backend (sin CORS, con cache de 5 min)
+const API_URL = 'https://lupita-f3e3c640.base44.app/functions/getClientes';
+
+async function loadFromBackend(forceRefresh = false) {
+  // Estrategia: 1) Intentar GET (cache en servidor), 2) Si falla, POST con token fresco
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000); // timeout 3s
+
+  try {
+    // Paso 1: intentar GET (debería servir desde cache)
+    const url = forceRefresh ? API_URL + '?force=true' : API_URL;
+    const resp = await fetch(url, { 
+      method: 'GET',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
+    
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.ok || data.stale) return data; // OK o stale es aceptable
+    }
+  } catch (e) {
+    // timeout o error de GET — seguir a paso 2
+    clearTimeout(timeoutId);
+  }
+
+  // Paso 2: GET falló — obtener token fresco e intentar POST
+  console.log('[DEBUG] GET falló, intentando POST con token fresco...');
+  throw new Error('API Cache no disponible — abrir en navegador web para usar Google Sign-In');
+}
+
+// Mantener para compatibilidad — no se usa directamente
+async function fetchSheetGVIZ(sheetName, range) { return []; }
+
+function buildAllClientsMap() {
+  allClientsMap = {};
+
+  // 1. Primero cargar TODOS los clientes de Rutas (todos los 841 activos) como base "gris"
+  rutasData.forEach(r => {
+    const code = String(r['Codigo'] || r['A'] || '').trim();
+    if (!code) return;
+    const lat = parseFloat(r['Lat'] || r['M']);
+    const lng = parseFloat(r['Lng'] || r['N']);
+    allClientsMap[code] = {
+      codigo: code,
+      nombre: r['Nombre'] || r['B'] || '',
+      direccion: r['Direccion'] || r['C'] || '',
+      comuna: r['Comuna'] || r['D'] || '',
+      lat: isNaN(lat) ? null : lat,
+      lng: isNaN(lng) ? null : lng,
+      camion: r['Camion'] || r['J'] || '',
+      vendedorRuta: r['Vendedor'] || r['I'] || '',
+      dia: r['Dia'] || r['L'] || '',
+      semana: r['Semana'] || r['K'] || '',
+      // Datos de seguimiento (se llenan abajo si existe)
+      ultimaVisita: '',
+      ultimaCompra: '',
+      diasSinContacto: null,
+      ticketPromedio: 0,
+      vendedor: '',
+      frecuenciaIdeal: null,
+      diasFaltantes: null,
+      kmUltimo: '',
+      enSeguimiento: false,
+      visitas: []
+    };
+  });
+
+  // 2. Merge con datos de Clientes seguimiento (los 841 con métricas calculadas)
+  seguimientoData.forEach(cs => {
+    const code = String(cs['Codigo'] || '').trim();
+    if (!code) return;
+    
+    const lat = parseFloat(cs['Lat']);
+    const lng = parseFloat(cs['Lng']);
+    let ticketNum = 0;
+    const ticketStr = String(cs['Ticket_Promedio'] || '');
+    ticketNum = parseFloat(ticketStr.replace(/[$.,\s]/g, '').replace(',', '.')) || 0;
+    const dias = cs['Días Faltantes'] !== '' ? parseFloat(cs['Días Faltantes']) : null;
+
+    if (allClientsMap[code]) {
+      Object.assign(allClientsMap[code], {
+        nombre: cs['Nombre'] || allClientsMap[code].nombre,
+        direccion: cs['Direccion'] || allClientsMap[code].direccion,
+        comuna: cs['Comuna'] || allClientsMap[code].comuna,
+        lat: isNaN(lat) ? allClientsMap[code].lat : lat,
+        lng: isNaN(lng) ? allClientsMap[code].lng : lng,
+        ultimaVisita: cs['Última Visita'] || '',
+        ultimaCompra: cs['última compra'] || '',
+        diasSinContacto: cs['Días último contacto'] !== '' ? parseFloat(cs['Días último contacto']) : null,
+        ticketPromedio: ticketNum,
+        vendedor: cs['último vendedor'] || '',
+        frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
+        diasFaltantes: isNaN(dias) ? null : dias,
+        kmUltimo: cs['Km desde último contacto'] || '',
+        enSeguimiento: true
+      });
+    } else {
+      // Está en seguimiento pero no en rutas (raro, lo agregamos igual)
+      allClientsMap[code] = {
+        codigo: code,
+        nombre: cs['Nombre'] || '',
+        direccion: cs['Direccion'] || '',
+        comuna: cs['Comuna'] || '',
+        lat: isNaN(lat) ? null : lat,
+        lng: isNaN(lng) ? null : lng,
+        camion: '', vendedorRuta: '', dia: '', semana: '',
+        ultimaVisita: cs['Última Visita'] || '',
+        ultimaCompra: cs['última compra'] || '',
+        diasSinContacto: cs['Días último contacto'] !== '' ? parseFloat(cs['Días último contacto']) : null,
+        ticketPromedio: ticketNum,
+        vendedor: cs['último vendedor'] || '',
+        frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
+        diasFaltantes: isNaN(dias) ? null : dias,
+        kmUltimo: cs['Km desde último contacto'] || '',
+        enSeguimiento: true,
+        visitas: []
+      };
+    }
+  });
+}
+
+// ============================================================
+// INIT FILTERS
+// ============================================================
+function initFilters() {
+  const clients = Object.values(allClientsMap);
+  const comunas = [...new Set(clients.map(c => c.comuna).filter(Boolean))].sort();
+  const vendedores = [...new Set(clients.map(c => c.vendedor).filter(Boolean))].sort();
+  
+  ['map-comuna','list-comuna','dash-comuna'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    comunas.forEach(c => { const o = new Option(c,c); sel.add(o); });
+  });
+  
+  ['map-vendedor','list-vendedor','dash-vendedor'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    vendedores.forEach(v => { const o = new Option(v,v); sel.add(o); });
+  });
+}
+
+// ============================================================
+// MAP
+// ============================================================
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([-33.45, -70.65], 11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '©OpenStreetMap ©CartoDB', maxZoom: 19
+  }).addTo(map);
+}
+
+function makeMarkerIcon(status, size = 10) {
+  const color = STATUS_COLORS[status] || STATUS_COLORS.nodata;
+  return L.divIcon({
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.4);box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
+    className: '',
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
+  });
+}
+
+function toggleTodos(el) {
+  mostrarTodos = !el.checked;
+  filterMap();
+}
+
+function filterMap() {
+  renderMapMarkers();
+}
+
+function renderMapMarkers() {
+  if (!map) return;
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  
+  const search = document.getElementById('map-search').value.toLowerCase();
+  const comuna = document.getElementById('map-comuna').value;
+  const status = document.getElementById('map-status').value;
+  const vendedor = document.getElementById('map-vendedor').value;
+  const soloSeg = document.getElementById('switch-seguimiento').checked;
+  
+  const clients = Object.values(allClientsMap).filter(c => {
+    if (!c.lat || !c.lng) return false;
+    if (soloSeg && !c.enSeguimiento) return false;
+    if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
+    if (comuna && c.comuna !== comuna) return false;
+    if (vendedor && c.vendedor !== vendedor) return false;
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    if (status && st !== status) return false;
+    return true;
+  });
+  
+  // Stats
+  const counts = { ok:0, green:0, yellow:0, red:0, critical:0, nodata:0 };
+  clients.forEach(c => {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    counts[st] = (counts[st] || 0) + 1;
+  });
+  
+  const statsEl = document.getElementById('map-stats');
+  statsEl.innerHTML = `
+    <div class="map-stat-card"><div class="num">${clients.length}</div><div class="lbl">Clientes visibles</div></div>
+    <div class="map-stat-card"><div class="num" style="color:#ef4444">${counts.red + counts.critical}</div><div class="lbl">Atrasados</div></div>
+  `;
+  
+  clients.forEach(c => {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const size = c.enSeguimiento ? 12 : 8;
+    const marker = L.marker([c.lat, c.lng], { icon: makeMarkerIcon(st, size) });
+    
+    const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes} días` : '—';
+    const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
+    
+    marker.bindPopup(`
+      <div class="popup-inner">
+        <div class="popup-name">${c.nombre}</div>
+        <div class="popup-addr">${c.direccion || c.comuna}</div>
+        <div class="popup-grid">
+          <div class="popup-stat">
+            <div class="popup-stat-label">Última visita</div>
+            <div class="popup-stat-val">${c.ultimaVisita || '—'}</div>
+          </div>
+          <div class="popup-stat">
+            <div class="popup-stat-label">Días faltantes</div>
+            <div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div>
+          </div>
+          <div class="popup-stat">
+            <div class="popup-stat-label">Ticket prom.</div>
+            <div class="popup-stat-val">${ticketStr}</div>
+          </div>
+          <div class="popup-stat">
+            <div class="popup-stat-label">Frecuencia</div>
+            <div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + ' días' : '—'}</div>
+          </div>
+        </div>
+        <div class="popup-actions">
+          ${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}
+          <button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button>
+        </div>
+      </div>
+    `, { maxWidth: 280 });
+    
+    marker.addTo(map);
+    markers.push(marker);
+  });
+}
+
+// ============================================================
+// LIST
+// ============================================================
+function getFilteredClients(prefix = 'list') {
+  const search = document.getElementById(`${prefix}-search`)?.value.toLowerCase() || '';
+  const comuna = document.getElementById(`${prefix}-comuna`)?.value || '';
+  const status = document.getElementById(`${prefix}-status`)?.value || '';
+  const vendedor = document.getElementById(`${prefix}-vendedor`)?.value || '';
+  const soloSeg = document.getElementById(`${prefix}-switch`)?.checked ?? true;
+  
+  return Object.values(allClientsMap).filter(c => {
+    if (soloSeg && !c.enSeguimiento) return false;
+    if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
+    if (comuna && c.comuna !== comuna) return false;
+    if (vendedor && c.vendedor !== vendedor) return false;
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    if (status && st !== status) return false;
+    return true;
+  });
+}
+
+function sortList(col) {
+  if (currentSort.col === col) currentSort.asc = !currentSort.asc;
+  else { currentSort.col = col; currentSort.asc = true; }
+  renderList();
+}
+
+function renderList() {
+  let clients = getFilteredClients('list');
+  
+  // Sort
+  clients.sort((a, b) => {
+    let va = a[currentSort.col], vb = b[currentSort.col];
+    if (currentSort.col === 'diasFaltantes' || currentSort.col === 'diasSinContacto' || currentSort.col === 'ticketPromedio') {
+      va = parseFloat(va) || -Infinity;
+      vb = parseFloat(vb) || -Infinity;
+    } else {
+      va = String(va || '').toLowerCase();
+      vb = String(vb || '').toLowerCase();
+    }
+    if (va < vb) return currentSort.asc ? -1 : 1;
+    if (va > vb) return currentSort.asc ? 1 : -1;
+    return 0;
+  });
+  
+  // Calugas
+  const counts = { ok:0, green:0, yellow:0, red:0, critical:0 };
+  let totalFueraFrecuencia = 0, ticketSumFuera = 0;
+  clients.forEach(c => {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    if (counts[st] !== undefined) counts[st]++;
+    if (['yellow','red','critical'].includes(st)) {
+      totalFueraFrecuencia++;
+      ticketSumFuera += c.ticketPromedio || 0;
+    }
+  });
+  
+  const ventasPerdidas = ticketSumFuera;
+  const calugas = document.getElementById('list-calugas');
+  calugas.innerHTML = `
+    <div class="caluga ok"><div class="caluga-num" style="color:#3b82f6">${counts.ok}</div><div class="caluga-label">🔵 OK</div></div>
+    <div class="caluga green"><div class="caluga-num" style="color:#22c55e">${counts.green}</div><div class="caluga-label">🟢 Verde</div></div>
+    <div class="caluga yellow"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
+    <div class="caluga red"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
+    <div class="caluga critical"><div class="caluga-num" style="color:#fca5a5">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
+    <div class="caluga" style="border-left:3px solid #eab308;min-width:200px">
+      <div class="caluga-label">Fuera de frecuencia</div>
+      <div class="caluga-num" style="color:#eab308">${totalFueraFrecuencia}</div>
+      <div class="caluga-sub">Ventas est. perdidas:</div>
+      <div class="caluga-lost" style="color:#ef4444">$${Math.round(ventasPerdidas).toLocaleString('es-CL')}</div>
+    </div>
+  `;
+  
+  // Table
+  const tbody = document.getElementById('list-body');
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#8b90b0">Sin resultados</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = clients.map(c => {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
+    const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
+    const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
+    return `
+      <tr>
+        <td><div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nombre}">${c.nombre}</div></td>
+        <td>${c.comuna || '—'}</td>
+        <td>${c.ultimaVisita || '—'}</td>
+        <td style="text-align:center">${c.diasSinContacto || '—'}</td>
+        <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
+        <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td>${ticketStr}</td>
+        <td style="font-size:12px;color:#8b90b0">${c.vendedor || '—'}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
+            <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// HISTORIAL MODAL
+// ============================================================
+function openHistorial(codigo) {
+  const c = allClientsMap[codigo];
+  if (!c) return;
+  
+  document.getElementById('modal-name').textContent = c.nombre;
+  document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
+  
+  // Visitas del cliente
+  const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
+    .sort((a,b) => {
+      const da = new Date(a['Fecha Visita'] || a['date'] || 0);
+      const db = new Date(b['Fecha Visita'] || b['date'] || 0);
+      return db - da;
+    });
+  
+  const ventas = visitas.filter(v => v['Visita/Venta'] === 'Venta');
+  const totalVentas = ventas.reduce((s, v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const ticketProm = ventas.length ? totalVentas / ventas.length : 0;
+  
+  document.getElementById('modal-stats').innerHTML = `
+    <div class="modal-stat"><div class="modal-stat-val">${visitas.length}</div><div class="modal-stat-lbl">Total visitas</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${ventas.length}</div><div class="modal-stat-lbl">Compras</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(ticketProm).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Ticket promedio</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
+  `;
+  
+  // Chart historial
+  const last30 = visitas.slice(0, 30).reverse();
+  const labels = last30.map(v => v['Fecha Visita'] || '');
+  const montos = last30.map(v => v['Visita/Venta'] === 'Venta' ? (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0) : 0);
+  
+  if (chartHist) chartHist.destroy();
+  const ctx = document.getElementById('chart-hist').getContext('2d');
+  chartHist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Venta neta',
+        data: montos,
+        backgroundColor: '#4f6ef7',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8b90b0', font: { size: 10 } }, grid: { color: '#2e3350' } },
+        y: { ticks: { color: '#8b90b0', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#2e3350' } }
+      }
+    }
+  });
+  
+  // Tabla
+  const tbody = document.getElementById('modal-hist-body');
+  tbody.innerHTML = visitas.slice(0, 50).map(v => {
+    const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
+    const tipo = v['Visita/Venta'] || 'Visita';
+    const color = tipo === 'Venta' ? '#22c55e' : '#8b90b0';
+    return `<tr>
+      <td>${v['Fecha Visita'] || '—'}</td>
+      <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
+      <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+      <td>${v['Distancia'] ? v['Distancia'] + ' km' : '—'}</td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').style.display = 'none';
+    if (chartHist) { chartHist.destroy(); chartHist = null; }
+  }
+}
+
+// ============================================================
+// ALERTS
+// ============================================================
+function renderAlerts() {
+  const diasThreshold = parseInt(document.getElementById('alert-dias').value) || 30;
+  const visitasSinVenta = parseInt(document.getElementById('alert-visitas-sin-venta').value) || 3;
+  
+  const clients = Object.values(allClientsMap).filter(c => c.enSeguimiento);
+  
+  let html = '';
+  
+  // Cat 1: Fuera de frecuencia
+  const fueraFrec = clients.filter(c => {
+    const d = parseFloat(c.diasFaltantes);
+    return !isNaN(d) && d < 0;
+  }).sort((a,b) => parseFloat(a.diasFaltantes) - parseFloat(b.diasFaltantes));
+  
+  if (fueraFrec.length) {
+    html += `<div class="section-title">⏰ Fuera de frecuencia ideal <span class="section-badge">${fueraFrec.length}</span></div>`;
+    fueraFrec.slice(0, 20).forEach(c => {
+      const dias = Math.abs(parseFloat(c.diasFaltantes));
+      const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+      html += `<div class="alert-card">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · Último contacto: ${c.ultimaVisita || '—'} · Vendedor: ${c.vendedor || '—'}</div>
+          <div class="alert-detail">Ticket promedio: ${c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—'}</div>
+        </div>
+        <span class="alert-badge badge badge-${st}">${dias} días atrasado</span>
+      </div>`;
+    });
+    if (fueraFrec.length > 20) html += `<div style="color:#8b90b0;font-size:13px;padding:8px 16px">... y ${fueraFrec.length - 20} más</div>`;
+    html += '<div style="height:24px"></div>';
+  }
+  
+  // Cat 2: Sin contacto hace más de N días
+  const sinContacto = clients.filter(c => {
+    const d = parseFloat(c.diasSinContacto);
+    return !isNaN(d) && d > diasThreshold;
+  }).sort((a,b) => parseFloat(b.diasSinContacto) - parseFloat(a.diasSinContacto));
+  
+  if (sinContacto.length) {
+    html += `<div class="section-title">📵 Sin contacto más de ${diasThreshold} días <span class="section-badge">${sinContacto.length}</span></div>`;
+    sinContacto.slice(0,15).forEach(c => {
+      html += `<div class="alert-card">
+        <div class="alert-icon">📵</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · Vendedor: ${c.vendedor || '—'}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(239,68,68,0.2);color:#f87171">${c.diasSinContacto} días</span>
+      </div>`;
+    });
+    html += '<div style="height:24px"></div>';
+  }
+  
+  // Cat 3: Nunca han comprado
+  const nuncaCompro = clients.filter(c => !c.ultimaCompra || c.ultimaCompra === '');
+  if (nuncaCompro.length) {
+    html += `<div class="section-title">🛒 Nunca han comprado <span class="section-badge">${nuncaCompro.length}</span></div>`;
+    nuncaCompro.slice(0,10).forEach(c => {
+      html += `<div class="alert-card">
+        <div class="alert-icon">🛒</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · Visitas: ${c.visitas.length}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(100,116,139,0.2);color:#94a3b8">Solo visitas</span>
+      </div>`;
+    });
+  }
+  
+  if (!html) html = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin alertas activas</div></div>';
+  
+  document.getElementById('alerts-body').innerHTML = html;
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function resetDashDates() {
+  document.getElementById('dash-desde').value = '';
+  document.getElementById('dash-hasta').value = '';
+  renderDashboard();
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // DD/MM/YYYY
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+  return new Date(str);
+}
+
+function renderDashboard() {
+  const vendedor = document.getElementById('dash-vendedor').value;
+  const comuna = document.getElementById('dash-comuna').value;
+  const search = document.getElementById('dash-search').value.toLowerCase();
+  const desde = document.getElementById('dash-desde').value ? new Date(document.getElementById('dash-desde').value) : null;
+  const hasta = document.getElementById('dash-hasta').value ? new Date(document.getElementById('dash-hasta').value) : null;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  let ventas = visitasData.filter(v => {
+    if (v['Visita/Venta'] !== 'Venta') return false;
+    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,''));
+    if (!monto) return false;
+    if (vendedor && v['salesman_name'] !== vendedor) return false;
+    if (comuna && v['locality'] !== comuna) return false;
+    if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    const fecha = parseDate(v['Fecha Visita']);
+    if (desde && fecha && fecha < desde) return false;
+    if (hasta && fecha && fecha > hasta) return false;
+    return true;
+  });
+  
+  const totalDia = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const totalSemana = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const totalMes = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  
+  const metaDia = META_MENSUAL / 22;
+  const metaSemana = META_MENSUAL / 4;
+  
+  function pct(v, m) { return Math.min(100, Math.round(v/m*100)); }
+  function metaStr(v, m) {
+    const p = pct(v,m);
+    return `<span class="${p>=100 ? 'meta-ok' : 'meta-bad'}">${p}% de meta</span>`;
+  }
+  function bar(v, m) {
+    const p = pct(v,m);
+    const color = p >= 100 ? '#22c55e' : p >= 60 ? '#eab308' : '#ef4444';
+    return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
+  }
+  
+  document.getElementById('dash-calugas').innerHTML = `
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta hoy</div>
+      <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
+      <div class="dash-caluga-meta">${metaStr(totalDia, metaDia)}</div>
+      ${bar(totalDia, metaDia)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta semana</div>
+      <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
+      <div class="dash-caluga-meta">${metaStr(totalSemana, metaSemana)}</div>
+      ${bar(totalSemana, metaSemana)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta mes</div>
+      <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
+      <div class="dash-caluga-meta">${metaStr(totalMes, META_MENSUAL)}</div>
+      ${bar(totalMes, META_MENSUAL)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Meta mensual</div>
+      <div class="dash-caluga-num">$${META_MENSUAL.toLocaleString('es-CL')}</div>
+      <div class="dash-caluga-meta" style="color:#8b90b0">Neto</div>
+    </div>
+  `;
+  
+  // Chart: últimos 30 días
+  const last30days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(startOfDay); d.setDate(d.getDate() - i);
+    last30days.push(d);
+  }
+  
+  const dailyMap = {};
+  ventas.forEach(v => {
+    const f = parseDate(v['Fecha Visita']);
+    if (!f) return;
+    const key = `${f.getDate()}/${f.getMonth()+1}`;
+    dailyMap[key] = (dailyMap[key] || 0) + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0);
+  });
+  
+  const chartLabels = last30days.map(d => `${d.getDate()}/${d.getMonth()+1}`);
+  const chartData = chartLabels.map(k => dailyMap[k] || 0);
+  
+  if (chartVentas) chartVentas.destroy();
+  const ctx1 = document.getElementById('chart-ventas').getContext('2d');
+  chartVentas = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Venta neta',
+        data: chartData,
+        backgroundColor: chartData.map(v => v > 0 ? '#4f6ef7' : '#2e3350'),
+        borderRadius: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8b90b0', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#2e3350' } },
+        y: { ticks: { color: '#8b90b0', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#2e3350' } }
+      }
+    }
+  });
+  
+  // Top 10 clientes
+  const clientMap = {};
+  ventas.forEach(v => {
+    const n = v['client_name'] || '—';
+    clientMap[n] = (clientMap[n] || 0) + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0);
+  });
+  const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+  
+  if (chartClientes) chartClientes.destroy();
+  const ctx2 = document.getElementById('chart-clientes').getContext('2d');
+  chartClientes = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: top10.map(x => x[0].substring(0,25)),
+      datasets: [{ data: top10.map(x => x[1]), backgroundColor: '#7c3aed', borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8b90b0', callback: v => '$' + Math.round(v/1000) + 'k' }, grid: { color: '#2e3350' } },
+        y: { ticks: { color: '#e8eaf6', font: { size: 11 } }, grid: { color: '#2e3350' } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+function renderAdmin() {
+  const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
+  
+  // GPS anomalías
+  const anomalias = visitasData.filter(v => {
+    const dist = parseFloat(v['Distancia']);
+    return !isNaN(dist) && dist > threshold;
+  }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
+  
+  document.getElementById('gps-count').textContent = anomalias.length;
+  
+  const gpsList = document.getElementById('gps-list');
+  if (!anomalias.length) {
+    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS</div></div>';
+  } else {
+    gpsList.innerHTML = anomalias.slice(0, 30).map(v => `
+      <div class="alert-card">
+        <div class="alert-icon">📍</div>
+        <div class="alert-info">
+          <div class="alert-name">${v['client_name'] || '—'}</div>
+          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${v['locality'] || '—'}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(239,68,68,0.2);color:#f87171">${parseFloat(v['Distancia']).toFixed(1)} km</span>
+      </div>
+    `).join('');
+  }
+  
+  // Solicitudes de baja (por comentario con "eliminar" o "baja")
+  const bajas = Object.values(allClientsMap).filter(c => {
+    const comment = (c.visitas.find(v => {
+      const comm = (v['comments'] || '').toLowerCase();
+      return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+    }));
+    return !!comment;
+  });
+  
+  document.getElementById('baja-count').textContent = bajas.length;
+  const bajaList = document.getElementById('baja-list');
+  if (!bajas.length) {
+    bajaList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin solicitudes de baja</div></div>';
+  } else {
+    bajaList.innerHTML = bajas.map(c => {
+      const v = c.visitas.find(v => {
+        const comm = (v['comments'] || '').toLowerCase();
+        return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+      });
+      return `<div class="alert-card">
+        <div class="alert-icon">🗑️</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · ${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'}</div>
+          <div class="alert-detail" style="color:#fbbf24;margin-top:4px">"${v['comments']}"</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="approveDelete('${c.codigo}')" style="background:#22c55e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Aprobar</button>
+          <button onclick="rejectDelete('${c.codigo}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rechazar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function approveDelete(codigo) {
+  if (confirm('¿Confirmar eliminación de cliente de seguimiento?')) {
+    alert('Marcado para eliminar. Acción debe confirmarse en el sheet.');
+  }
+}
+function rejectDelete(codigo) {
+  alert('Solicitud rechazada.');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  event.target.classList.add('active');
+  
+  if (name === 'map') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadData();
+</script>
+</body>
+</html>
