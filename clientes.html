@@ -428,14 +428,40 @@
       <button onclick="resetDashDates()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:7px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:inherit;">Limpiar</button>
     </div>
     <div class="dashboard-inner">
+      <!-- KPIs principales -->
       <div class="dash-calugas" id="dash-calugas"></div>
+      <!-- KPIs secundarios -->
+      <div class="dash-calugas" id="dash-calugas2"></div>
+      <!-- Línea: ventas por día -->
       <div class="chart-card">
-        <div class="chart-title">Ventas por día (últimos 30 días)</div>
+        <div class="chart-title">📈 Ventas netas por día — últimos 30 días</div>
         <canvas id="chart-ventas" height="80"></canvas>
       </div>
-      <div class="chart-card">
-        <div class="chart-title">Top 10 clientes por venta</div>
-        <canvas id="chart-clientes" height="100"></canvas>
+      <!-- Fila de dos charts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="chart-card">
+          <div class="chart-title">🏆 Top 10 clientes</div>
+          <canvas id="chart-clientes" height="180"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">👤 Ventas por vendedor</div>
+          <canvas id="chart-vendedores" height="180"></canvas>
+        </div>
+      </div>
+      <!-- Tabla top clientes detalle -->
+      <div class="chart-card" style="overflow-x:auto">
+        <div class="chart-title">📋 Detalle top 20 clientes del período</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px" id="dash-tabla">
+          <thead><tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">#</th>
+            <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">Cliente</th>
+            <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">Comuna</th>
+            <th style="text-align:right;padding:8px 6px;color:var(--text2);font-weight:500">Pedidos</th>
+            <th style="text-align:right;padding:8px 6px;color:var(--text2);font-weight:500">Total neto</th>
+            <th style="text-align:right;padding:8px 6px;color:var(--text2);font-weight:500">Ticket prom.</th>
+          </tr></thead>
+          <tbody id="dash-tabla-body"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -448,10 +474,14 @@
         📍 Visitas con distancia anómala
         <span class="section-badge" id="gps-count">0</span>
       </div>
-      <div class="config-row">
-        <span class="config-label">Mostrar visitas a más de</span>
-        <input type="number" class="config-input" id="gps-threshold" value="2" min="0.1" step="0.1" onchange="renderAdmin()">
-        <span class="config-label">km del cliente</span>
+      <div class="filter-bar" style="padding:8px 0">
+        <span class="config-label" style="white-space:nowrap">Más de</span>
+        <input type="number" class="config-input" id="gps-threshold" value="2" min="0.1" step="0.1" onchange="renderAdmin()" style="width:70px">
+        <span class="config-label">km</span>
+        <select id="gps-vendedor" onchange="renderAdmin()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px"><option value="">Todos los vendedores</option></select>
+        <input type="date" id="gps-desde" onchange="renderAdmin()" title="Desde">
+        <input type="date" id="gps-hasta" onchange="renderAdmin()" title="Hasta">
+        <button onclick="document.getElementById('gps-desde').value='';document.getElementById('gps-hasta').value='';renderAdmin();" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px">Limpiar</button>
       </div>
       <div id="gps-list"></div>
 
@@ -573,6 +603,13 @@ async function loadData(force = false) {
         const parts = ultima.split('/');
         if (parts.length === 3) {
           const d = parseInt(parts[0]), m = parseInt(parts[1])-1, y = parseInt(parts[2]);
+          // Detectar fecha fantasma 30/12/1899 = cliente nunca visitado (error Excel serial 0)
+          if (y <= 1900) {
+            cs['Días último contacto'] = '';
+            cs['Días Faltantes'] = null;
+            cs['_nuncaVisitado'] = '1';
+            return;
+          }
           const fechaVisita = new Date(y,m,d);
           const diasSin = Math.floor((today - fechaVisita) / 86400000);
           cs['Días último contacto'] = String(diasSin);
@@ -665,7 +702,7 @@ function buildAllClientsMap() {
       codigo: code,
       nombre: r['Nombre'] || r['B'] || '',
       direccion: r['Direccion'] || r['C'] || '',
-      comuna: r['Comuna'] || r['D'] || '',
+      comuna: normalizeComuna(r['Comuna'] || r['D'] || ''),
       lat: isNaN(lat) ? null : lat,
       lng: isNaN(lng) ? null : lng,
       camion: r['Camion'] || r['J'] || '',
@@ -696,13 +733,13 @@ function buildAllClientsMap() {
     let ticketNum = 0;
     const ticketStr = String(cs['Ticket_Promedio'] || '');
     ticketNum = parseFloat(ticketStr.replace(/[$.,\s]/g, '').replace(',', '.')) || 0;
-    const dias = cs['Días Faltantes'] !== '' ? parseFloat(cs['Días Faltantes']) : null;
+    const diasRaw = String(cs['Días Faltantes'] || '').replace(/,/g,''); const dias = diasRaw !== '' ? parseFloat(diasRaw) : null;
 
     if (allClientsMap[code]) {
       Object.assign(allClientsMap[code], {
         nombre: cs['Nombre'] || allClientsMap[code].nombre,
         direccion: cs['Direccion'] || allClientsMap[code].direccion,
-        comuna: cs['Comuna'] || allClientsMap[code].comuna,
+        comuna: normalizeComuna(cs['Comuna'] || allClientsMap[code].comuna),
         lat: isNaN(lat) ? allClientsMap[code].lat : lat,
         lng: isNaN(lng) ? allClientsMap[code].lng : lng,
         ultimaVisita: cs['Última Visita'] || '',
@@ -721,7 +758,7 @@ function buildAllClientsMap() {
         codigo: code,
         nombre: cs['Nombre'] || '',
         direccion: cs['Direccion'] || '',
-        comuna: cs['Comuna'] || '',
+        comuna: normalizeComuna(cs['Comuna'] || ''),
         lat: isNaN(lat) ? null : lat,
         lng: isNaN(lng) ? null : lng,
         camion: '', vendedorRuta: '', dia: '', semana: '',
@@ -743,6 +780,29 @@ function buildAllClientsMap() {
 // ============================================================
 // INIT FILTERS
 // ============================================================
+
+// ============================================================
+// NORMALIZACIÓN DE COMUNAS
+// ============================================================
+const COMUNA_MAP = {
+  'maipu': 'Maipú', 'maipú': 'Maipú',
+  'penalolen': 'Peñalolén', 'peñalolen': 'Peñalolén', 'peñalolén': 'Peñalolén',
+  'conchali': 'Conchalí', 'conchalí': 'Conchalí',
+  'la florida': 'La Florida',
+  'san joaquin': 'San Joaquín', 'san joaquín': 'San Joaquín', 'san joaquin ': 'San Joaquín',
+  'pte. alto': 'Puente Alto',
+  'estacion central': 'Estación Central', 'estación central': 'Estación Central',
+  'san jose de maipo': 'San José de Maipo', 'san josé del maipo': 'San José de Maipo',
+  'nunoa': 'Ñuñoa', 'ñuñoa': 'Ñuñoa',
+  'santiago': 'Santiago', 'la florida': 'La Florida',
+  'pedro aguirre cerda': 'Pedro Aguirre Cerda',
+  'paine pintue': 'Paine',
+};
+function normalizeComuna(raw) {
+  if (!raw) return '';
+  const key = raw.trim().toLowerCase();
+  return COMUNA_MAP[key] || raw.trim().replace(/\b\w/g, l => l.toUpperCase());
+}
 function initFilters() {
   const clients = Object.values(allClientsMap);
   const comunas = [...new Set(clients.map(c => c.comuna).filter(Boolean))].sort();
@@ -924,6 +984,8 @@ function renderList() {
     }
   });
   
+  // Ventas est. perdidas = suma de tickets de clientes fuera de frecuencia
+  // Representa lo que habrían comprado si hubieran sido visitados a tiempo
   const ventasPerdidas = ticketSumFuera;
   const calugas = document.getElementById('list-calugas');
   calugas.innerHTML = `
@@ -1069,6 +1131,7 @@ function renderAlerts() {
   
   // Cat 1: Fuera de frecuencia
   const fueraFrec = clients.filter(c => {
+    if (c._nuncaVisitado) return false;  // excluir sin historial
     const d = parseFloat(c.diasFaltantes);
     return !isNaN(d) && d < 0;
   }).sort((a,b) => parseFloat(a.diasFaltantes) - parseFloat(b.diasFaltantes));
@@ -1076,7 +1139,8 @@ function renderAlerts() {
   if (fueraFrec.length) {
     html += `<div class="section-title">⏰ Fuera de frecuencia ideal <span class="section-badge">${fueraFrec.length}</span></div>`;
     fueraFrec.slice(0, 20).forEach(c => {
-      const dias = Math.abs(parseFloat(c.diasFaltantes));
+      const diasF = parseFloat(c.diasFaltantes) || 0;
+      const dias = Math.abs(diasF);
       const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
       html += `<div class="alert-card">
         <div class="alert-icon">⚠️</div>
@@ -1085,7 +1149,7 @@ function renderAlerts() {
           <div class="alert-detail">${c.comuna} · Último contacto: ${c.ultimaVisita || '—'} · Vendedor: ${c.vendedor || '—'}</div>
           <div class="alert-detail">Ticket promedio: ${c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—'}</div>
         </div>
-        <span class="alert-badge badge badge-${st}">${dias} días atrasado</span>
+        <span class="alert-badge badge badge-${st}">${c._nuncaVisitado ? 'Sin visita' : Math.abs(diasF) + ' días atrasado'}</span>
       </div>`;
     });
     if (fueraFrec.length > 20) html += `<div style="color:#8b90b0;font-size:13px;padding:8px 16px">... y ${fueraFrec.length - 20} más</div>`;
@@ -1160,66 +1224,125 @@ function renderDashboard() {
   
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay() + 1); // lunes
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
   
-  let ventas = visitasData.filter(v => {
+  function parseMonto(v) { return parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0; }
+  
+  let todasVisitas = visitasData.filter(v => {
     if (v['Visita/Venta'] !== 'Venta') return false;
-    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,''));
-    if (!monto) return false;
+    if (!parseMonto(v)) return false;
     if (vendedor && v['salesman_name'] !== vendedor) return false;
-    if (comuna && v['locality'] !== comuna) return false;
+    if (comuna && normalizeComuna(v['locality']) !== comuna) return false;
     if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Ventas del período filtrado por fechas (para charts)
+  let ventasFiltradas = todasVisitas.filter(v => {
     const fecha = parseDate(v['Fecha Visita']);
     if (desde && fecha && fecha < desde) return false;
     if (hasta && fecha && fecha > hasta) return false;
     return true;
   });
+
+  // KPIs siempre en base a períodos fijos (hoy / semana / mes) sin importar filtro de fechas
+  const totalDia = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalSemana = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMes = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMesAnterior = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
+    .reduce((s,v) => s + parseMonto(v), 0);
   
-  const totalDia = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
-    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
-  const totalSemana = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
-    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
-  const totalMes = ventas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
-    .reduce((s,v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  // Pedidos y tickets
+  const pedidosDia = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
+  const pedidosMes = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
+  const ticketPromMes = pedidosMes ? Math.round(totalMes / pedidosMes) : 0;
+  
+  // Clientes únicos del mes
+  const clientesUnicos = new Set(todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
+  
+  // Días hábiles transcurridos en el mes (aprox)
+  const diasMes = startOfDay.getDate();
+  const diasHabiles = Math.round(diasMes * 5/7);
+  const proyeccion = diasHabiles > 0 ? Math.round(totalMes / diasHabiles * 22) : 0;
+  
+  // Variación mes vs mes anterior
+  const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
   
   const metaDia = META_MENSUAL / 22;
-  const metaSemana = META_MENSUAL / 4;
+  const metaSemana = (META_MENSUAL / 22) * 5;
   
   function pct(v, m) { return Math.min(100, Math.round(v/m*100)); }
   function metaStr(v, m) {
     const p = pct(v,m);
-    return `<span class="${p>=100 ? 'meta-ok' : 'meta-bad'}">${p}% de meta</span>`;
+    return `<span style="color:${p>=100?'#16a34a':p>=60?'#ca8a04':'#dc2626'};font-size:11px;font-weight:600">${p}% meta</span>`;
   }
   function bar(v, m) {
     const p = pct(v,m);
-    const color = p >= 100 ? '#22c55e' : p >= 60 ? '#eab308' : '#ef4444';
+    const color = p >= 100 ? '#16a34a' : p >= 60 ? '#eab308' : '#ef4444';
     return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
   }
-  
+  function varStr(v) {
+    if (v === null) return '';
+    return `<span style="color:${v>=0?'#16a34a':'#dc2626'};font-size:11px">${v>=0?'+':''}${v}% vs mes ant.</span>`;
+  }
+
   document.getElementById('dash-calugas').innerHTML = `
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta hoy</div>
       <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
-      <div class="dash-caluga-meta">${metaStr(totalDia, metaDia)}</div>
+      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos</div>
+      ${metaStr(totalDia, metaDia)}
       ${bar(totalDia, metaDia)}
     </div>
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta semana</div>
       <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
-      <div class="dash-caluga-meta">${metaStr(totalSemana, metaSemana)}</div>
+      <div style="font-size:11px;color:var(--text2)">L-V actual</div>
+      ${metaStr(totalSemana, metaSemana)}
       ${bar(totalSemana, metaSemana)}
     </div>
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta mes</div>
       <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
-      <div class="dash-caluga-meta">${metaStr(totalMes, META_MENSUAL)}</div>
+      ${varStr(varPct)}
+      ${metaStr(totalMes, META_MENSUAL)}
       ${bar(totalMes, META_MENSUAL)}
     </div>
     <div class="dash-caluga">
-      <div class="dash-caluga-label">Meta mensual</div>
-      <div class="dash-caluga-num">$${META_MENSUAL.toLocaleString('es-CL')}</div>
-      <div class="dash-caluga-meta" style="color:#8b90b0">Neto</div>
+      <div class="dash-caluga-label">Proyección mes</div>
+      <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">Al ritmo actual</div>
+      ${metaStr(proyeccion, META_MENSUAL)}
+      ${bar(proyeccion, META_MENSUAL)}
+    </div>
+  `;
+
+  document.getElementById('dash-calugas2').innerHTML = `
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Pedidos mes</div>
+      <div class="dash-caluga-num" style="font-size:24px">${pedidosMes}</div>
+      <div style="font-size:11px;color:var(--text2)">Ventas únicas</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Ticket promedio</div>
+      <div class="dash-caluga-num" style="font-size:22px">$${ticketPromMes.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">Este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Clientes activos</div>
+      <div class="dash-caluga-num" style="font-size:24px">${clientesUnicos.size}</div>
+      <div style="font-size:11px;color:var(--text2)">Compraron este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Mes anterior</div>
+      <div class="dash-caluga-num" style="font-size:20px">$${Math.round(totalMesAnterior).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)}</div>
     </div>
   `;
   
@@ -1229,17 +1352,16 @@ function renderDashboard() {
     const d = new Date(startOfDay); d.setDate(d.getDate() - i);
     last30days.push(d);
   }
-  
   const dailyMap = {};
-  ventas.forEach(v => {
+  ventasFiltradas.forEach(v => {
     const f = parseDate(v['Fecha Visita']);
     if (!f) return;
     const key = `${f.getDate()}/${f.getMonth()+1}`;
-    dailyMap[key] = (dailyMap[key] || 0) + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0);
+    dailyMap[key] = (dailyMap[key] || 0) + parseMonto(v);
   });
-  
   const chartLabels = last30days.map(d => `${d.getDate()}/${d.getMonth()+1}`);
   const chartData = chartLabels.map(k => dailyMap[k] || 0);
+  const metaDiaLine = Array(30).fill(metaDia);
   
   if (chartVentas) chartVentas.destroy();
   const ctx1 = document.getElementById('chart-ventas').getContext('2d');
@@ -1247,16 +1369,14 @@ function renderDashboard() {
     type: 'bar',
     data: {
       labels: chartLabels,
-      datasets: [{
-        label: 'Venta neta',
-        data: chartData,
-        backgroundColor: chartData.map(v => v > 0 ? '#4f6ef7' : '#2e3350'),
-        borderRadius: 3
-      }]
+      datasets: [
+        { label: 'Venta neta', data: chartData, backgroundColor: chartData.map(v => v > 0 ? '#4f6ef7' : '#e5e7eb'), borderRadius: 3 },
+        { label: 'Meta/día', data: metaDiaLine, type: 'line', borderColor: '#ef4444', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, fill: false }
+      ]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20 } } },
       scales: {
         x: { ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#e5e7eb' } },
         y: { ticks: { color: '#6b7280', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#e5e7eb' } }
@@ -1266,19 +1386,24 @@ function renderDashboard() {
   
   // Top 10 clientes
   const clientMap = {};
-  ventas.forEach(v => {
+  const clientData = {};
+  ventasFiltradas.forEach(v => {
     const n = v['client_name'] || '—';
-    clientMap[n] = (clientMap[n] || 0) + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0);
+    const loc = normalizeComuna(v['locality'] || '');
+    if (!clientMap[n]) { clientMap[n] = 0; clientData[n] = { loc, count: 0 }; }
+    clientMap[n] += parseMonto(v);
+    clientData[n].count++;
   });
   const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const top20 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,20);
   
   if (chartClientes) chartClientes.destroy();
   const ctx2 = document.getElementById('chart-clientes').getContext('2d');
   chartClientes = new Chart(ctx2, {
     type: 'bar',
     data: {
-      labels: top10.map(x => x[0].substring(0,25)),
-      datasets: [{ data: top10.map(x => x[1]), backgroundColor: '#7c3aed', borderRadius: 4 }]
+      labels: top10.map(x => x[0].substring(0,22)),
+      datasets: [{ label: 'Total neto', data: top10.map(x => x[1]), backgroundColor: '#7c3aed', borderRadius: 4 }]
     },
     options: {
       indexAxis: 'y',
@@ -1286,10 +1411,54 @@ function renderDashboard() {
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { color: '#6b7280', callback: v => '$' + Math.round(v/1000) + 'k' }, grid: { color: '#e5e7eb' } },
-        y: { ticks: { color: '#1a1d2e', font: { size: 11 } }, grid: { color: '#e5e7eb' } }
+        y: { ticks: { color: '#1a1d2e', font: { size: 10 } }, grid: { color: '#e5e7eb' } }
       }
     }
   });
+
+  // Chart por vendedor
+  const vendMap = {};
+  ventasFiltradas.forEach(v => {
+    const vend = v['salesman_name'] || 'Otro';
+    vendMap[vend] = (vendMap[vend] || 0) + parseMonto(v);
+  });
+  const vendEntries = Object.entries(vendMap).sort((a,b) => b[1]-a[1]);
+  const COLORS_VEND = ['#4f6ef7','#7c3aed','#16a34a','#ea580c','#0891b2','#db2777'];
+  
+  if (!window.chartVendedores) window.chartVendedores = null;
+  if (window.chartVendedores) window.chartVendedores.destroy();
+  const ctx3 = document.getElementById('chart-vendedores').getContext('2d');
+  window.chartVendedores = new Chart(ctx3, {
+    type: 'doughnut',
+    data: {
+      labels: vendEntries.map(x => x[0]),
+      datasets: [{ data: vendEntries.map(x => x[1]), backgroundColor: COLORS_VEND, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => '$' + Math.round(ctx.parsed).toLocaleString('es-CL') } }
+      }
+    }
+  });
+
+  // Tabla top 20
+  const tbody = document.getElementById('dash-tabla-body');
+  if (tbody) {
+    tbody.innerHTML = top20.map(([nombre, total], i) => {
+      const d = clientData[nombre] || {};
+      const ticket = d.count ? Math.round(total / d.count) : 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${i+1}</td>
+        <td style="padding:7px 6px;font-weight:500;font-size:13px">${nombre}</td>
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${d.loc || '—'}</td>
+        <td style="padding:7px 6px;text-align:right;font-size:12px">${d.count}</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:600;color:var(--accent)">${'$'+Math.round(total).toLocaleString('es-CL')}</td>
+        <td style="padding:7px 6px;text-align:right;color:var(--text2);font-size:12px">$${ticket.toLocaleString('es-CL')}</td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 // ============================================================
@@ -1297,27 +1466,44 @@ function renderDashboard() {
 // ============================================================
 function renderAdmin() {
   const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
+  const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
+  const gpsDesdeEl = document.getElementById('gps-desde');
+  const gpsHastaEl = document.getElementById('gps-hasta');
+  const gpsDesde = gpsDesdeEl && gpsDesdeEl.value ? new Date(gpsDesdeEl.value) : null;
+  const gpsHasta = gpsHastaEl && gpsHastaEl.value ? new Date(gpsHastaEl.value) : null;
+
+  // Poblar select de vendedores en GPS si está vacío
+  const gpsVendSel = document.getElementById('gps-vendedor');
+  if (gpsVendSel && gpsVendSel.options.length <= 1) {
+    const vends = [...new Set(visitasData.map(v => v['salesman_name']).filter(Boolean))].sort();
+    vends.forEach(v => { const o = new Option(v,v); gpsVendSel.add(o); });
+  }
   
-  // GPS anomalías
+  // GPS anomalías con filtros
   const anomalias = visitasData.filter(v => {
     const dist = parseFloat(v['Distancia']);
-    return !isNaN(dist) && dist > threshold;
+    if (isNaN(dist) || dist <= threshold) return false;
+    if (gpsVendedor && v['salesman_name'] !== gpsVendedor) return false;
+    const f = parseDate(v['Fecha Visita']);
+    if (gpsDesde && f && f < gpsDesde) return false;
+    if (gpsHasta && f && f > gpsHasta) return false;
+    return true;
   }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
   
   document.getElementById('gps-count').textContent = anomalias.length;
   
   const gpsList = document.getElementById('gps-list');
   if (!anomalias.length) {
-    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS</div></div>';
+    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
   } else {
-    gpsList.innerHTML = anomalias.slice(0, 30).map(v => `
+    gpsList.innerHTML = anomalias.slice(0, 50).map(v => `
       <div class="alert-card">
         <div class="alert-icon">📍</div>
         <div class="alert-info">
           <div class="alert-name">${v['client_name'] || '—'}</div>
-          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${v['locality'] || '—'}</div>
+          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${normalizeComuna(v['locality'] || '')}</div>
         </div>
-        <span class="alert-badge" style="background:rgba(239,68,68,0.2);color:#f87171">${parseFloat(v['Distancia']).toFixed(1)} km</span>
+        <span class="alert-badge" style="background:rgba(220,38,38,0.15);color:#dc2626;font-weight:600">${parseFloat(v['Distancia']).toFixed(1)} km</span>
       </div>
     `).join('');
   }
