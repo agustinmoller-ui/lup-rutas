@@ -11,24 +11,24 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #22263a;
-    --border: #2e3350;
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --surface2: #f0f2f7;
+    --border: #dde1eb;
     --accent: #4f6ef7;
     --accent2: #7c3aed;
-    --text: #e8eaf6;
-    --text2: #8b90b0;
+    --text: #1a1d2e;
+    --text2: #6b7280;
     --ok: #3b82f6;
-    --green: #22c55e;
-    --yellow: #eab308;
-    --red: #ef4444;
-    --critical: #7f1d1d;
-    --critical-text: #fca5a5;
-    --gray: #64748b;
+    --green: #16a34a;
+    --yellow: #ca8a04;
+    --red: #dc2626;
+    --critical: #dc2626;
+    --critical-text: #dc2626;
+    --gray: #9ca3af;
     --radius: 12px;
     --radius-sm: 8px;
-    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
@@ -158,12 +158,12 @@
   .badge {
     display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
   }
-  .badge-ok { background: rgba(59,130,246,0.2); color: #60a5fa; }
-  .badge-green { background: rgba(34,197,94,0.2); color: #4ade80; }
-  .badge-yellow { background: rgba(234,179,8,0.2); color: #fbbf24; }
-  .badge-red { background: rgba(239,68,68,0.2); color: #f87171; }
-  .badge-critical { background: rgba(127,29,29,0.4); color: #fca5a5; }
-  .badge-gray { background: rgba(100,116,139,0.2); color: #94a3b8; }
+  .badge-ok { background: rgba(59,130,246,0.15); color: #2563eb; }
+  .badge-green { background: rgba(22,163,74,0.15); color: #16a34a; }
+  .badge-yellow { background: rgba(202,138,4,0.15); color: #b45309; }
+  .badge-red { background: rgba(220,38,38,0.15); color: #dc2626; }
+  .badge-critical { background: rgba(220,38,38,0.2); color: #991b1b; }
+  .badge-gray { background: rgba(156,163,175,0.2); color: #6b7280; }
   .link-btn { color: var(--accent); text-decoration: none; font-size: 12px; }
   .link-btn:hover { text-decoration: underline; }
   .hist-btn {
@@ -310,7 +310,9 @@
     <button class="tab-btn" onclick="showView('dashboard')">📊 Ventas</button>
     <button class="tab-btn admin-only" onclick="showView('admin')">🔐 Admin</button>
   </div>
-  <div class="nav-right">
+  <div class="nav-right" style="display:flex;align-items:center;gap:8px">
+    <span id="last-update" style="font-size:10px;color:var(--text2);display:none"></span>
+    <button onclick="refreshData()" id="refresh-btn" title="Actualizar datos" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:14px;color:var(--text2)">⟳</button>
     <div class="role-badge" id="role-badge">Admin</div>
   </div>
 </nav>
@@ -536,7 +538,7 @@ const STATUS_COLORS = {
   red: '#ef4444',
   critical: '#7f1d1d',
   nodata: '#64748b',
-  noseg: '#374151'  // gris oscuro para clientes fuera de seguimiento
+  noseg: '#d1d5db'  // gris oscuro para clientes fuera de seguimiento
 };
 
 const STATUS_LABELS = {
@@ -554,13 +556,30 @@ const STATUS_LABELS = {
 // ============================================================
 let rutasData = []; // Todos los clientes del borrador de rutas
 
-async function loadData() {
+async function loadData(force = false) {
   try {
     // Intentar cargar desde cache del backend primero (rápido)
-    const data = await loadFromBackend();
+    const data = await loadFromBackend(force);
     seguimientoData = data.seguimiento || [];
     rutasData = data.rutas || [];
-    visitasData = [];
+    visitasData = data.visitas || [];
+    // Recalcular diasFaltantes con fecha de HOY (no confiar en el Sheet)
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    seguimientoData.forEach(cs => {
+      const ultima = cs['Última Visita'] || cs['\u00daltima Visita'] || '';
+      const frec = parseFloat(cs['Frecuencia Ideal'] || '0');
+      if (ultima && frec > 0) {
+        const parts = ultima.split('/');
+        if (parts.length === 3) {
+          const d = parseInt(parts[0]), m = parseInt(parts[1])-1, y = parseInt(parts[2]);
+          const fechaVisita = new Date(y,m,d);
+          const diasSin = Math.floor((today - fechaVisita) / 86400000);
+          cs['Días último contacto'] = String(diasSin);
+          cs['Días Faltantes'] = String(frec - diasSin);
+        }
+      }
+    });
     
     buildAllClientsMap();
     initFilters();
@@ -572,17 +591,31 @@ async function loadData() {
     renderAdmin();
     
     document.getElementById('loading').style.display = 'none';
+    const upd = document.getElementById('last-update');
+    if (upd) { 
+      const now = new Date();
+      upd.textContent = now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+      upd.style.display = 'inline';
+    }
   } catch(e) {
     console.error('Error loadData:', e);
     const isAuthError = e.message.includes('Google Identity') || e.message.includes('access_denied');
     document.getElementById('loading').innerHTML = `
       <div style="text-align:center;padding:40px">
         <div style="font-size:48px;margin-bottom:16px">⚠️</div>
-        <div style="color:#e8eaf6;font-size:16px;font-weight:600;margin-bottom:8px">Error al cargar datos</div>
-        <div style="color:#8b90b0;font-size:13px;max-width:300px">Error: ${e.message}</div>
+        <div style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:8px">Error al cargar datos</div>
+        <div style="color:var(--text2);font-size:13px;max-width:300px">Error: ${e.message}</div>
         <button onclick="loadData()" style="margin-top:20px;background:#4f6ef7;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px">Reintentar</button>
       </div>`;
   }
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) { btn.textContent = '⟳'; btn.style.opacity = '0.5'; btn.disabled = true; }
+  document.getElementById('loading').style.display = 'flex';
+  await loadData(true);
+  if (btn) { btn.textContent = '⟳'; btn.style.opacity = '1'; btn.disabled = false; }
 }
 
 // Carga datos desde función backend (sin CORS, con cache de 5 min)
@@ -733,7 +766,7 @@ function initFilters() {
 // ============================================================
 function initMap() {
   map = L.map('map', { zoomControl: true }).setView([-33.45, -70.65], 11);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '©OpenStreetMap ©CartoDB', maxZoom: 19
   }).addTo(map);
 }
@@ -898,7 +931,7 @@ function renderList() {
     <div class="caluga green"><div class="caluga-num" style="color:#22c55e">${counts.green}</div><div class="caluga-label">🟢 Verde</div></div>
     <div class="caluga yellow"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
     <div class="caluga red"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
-    <div class="caluga critical"><div class="caluga-num" style="color:#fca5a5">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
+    <div class="caluga critical"><div class="caluga-num" style="color:#dc2626">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
     <div class="caluga" style="border-left:3px solid #eab308;min-width:200px">
       <div class="caluga-label">Fuera de frecuencia</div>
       <div class="caluga-num" style="color:#eab308">${totalFueraFrecuencia}</div>
@@ -910,7 +943,7 @@ function renderList() {
   // Table
   const tbody = document.getElementById('list-body');
   if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#8b90b0">Sin resultados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
     return;
   }
   
@@ -992,8 +1025,8 @@ function openHistorial(codigo) {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#8b90b0', font: { size: 10 } }, grid: { color: '#2e3350' } },
-        y: { ticks: { color: '#8b90b0', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#2e3350' } }
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#6b7280', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#e5e7eb' } }
       }
     }
   });
@@ -1003,7 +1036,7 @@ function openHistorial(codigo) {
   tbody.innerHTML = visitas.slice(0, 50).map(v => {
     const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
     const tipo = v['Visita/Venta'] || 'Visita';
-    const color = tipo === 'Venta' ? '#22c55e' : '#8b90b0';
+    const color = tipo === 'Venta' ? '#16a34a' : '#9ca3af';
     return `<tr>
       <td>${v['Fecha Visita'] || '—'}</td>
       <td><span style="color:${color};font-weight:600">${tipo}</span></td>
@@ -1225,8 +1258,8 @@ function renderDashboard() {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#8b90b0', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#2e3350' } },
-        y: { ticks: { color: '#8b90b0', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#2e3350' } }
+        x: { ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#6b7280', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#e5e7eb' } }
       }
     }
   });
@@ -1252,8 +1285,8 @@ function renderDashboard() {
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: '#8b90b0', callback: v => '$' + Math.round(v/1000) + 'k' }, grid: { color: '#2e3350' } },
-        y: { ticks: { color: '#e8eaf6', font: { size: 11 } }, grid: { color: '#2e3350' } }
+        x: { ticks: { color: '#6b7280', callback: v => '$' + Math.round(v/1000) + 'k' }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#1a1d2e', font: { size: 11 } }, grid: { color: '#e5e7eb' } }
       }
     }
   });
