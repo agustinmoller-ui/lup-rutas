@@ -381,14 +381,7 @@
         <option value="lt10000">Menor $10k</option>
         <option value="sin_venta">Sin ventas</option>
       </select>
-      <div class="switch-wrap">
-        <span class="switch-label">Seguimiento</span>
-        <label class="switch">
-          <input type="checkbox" id="list-switch" checked onchange="renderList()">
-          <span class="slider"></span>
-        </label>
-        <span class="switch-label">Todos</span>
-      </div>
+
     </div>
     <div class="calugas-row" id="list-calugas"></div>
     <div class="list-view-inner">
@@ -428,54 +421,35 @@
 
   <!-- ===== DASHBOARD VIEW ===== -->
   <div class="view" id="view-dashboard">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
-      <!-- Período rápido -->
+    <!-- Filtros de período y vendedor -->
+    <div class="filter-bar" style="flex-wrap:wrap;gap:6px;padding:10px 16px 6px">
       <div id="dash-periodos" style="display:flex;gap:4px">
         <button class="periodo-btn active" data-periodo="hoy" onclick="setPeriodo(this)">Hoy</button>
         <button class="periodo-btn" data-periodo="semana" onclick="setPeriodo(this)">Semana</button>
         <button class="periodo-btn" data-periodo="mes" onclick="setPeriodo(this)">Mes</button>
         <button class="periodo-btn" data-periodo="anio" onclick="setPeriodo(this)">Año</button>
-        <button class="periodo-btn" data-periodo="custom" onclick="setPeriodo(this)">📅 Custom</button>
+        <button class="periodo-btn" data-periodo="custom" onclick="setPeriodo(this)">📅</button>
       </div>
-      <!-- Fechas custom (ocultas por defecto) -->
-      <div id="dash-custom-dates" style="display:none;gap:6px;align-items:center;display:none">
-        <input type="date" id="dash-desde" onchange="renderDashboard()" style="padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface2);color:var(--text)">
+      <div id="dash-custom-dates" style="display:none;gap:6px;align-items:center">
+        <input type="date" id="dash-desde" onchange="renderDashboard()" style="padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface2);color:var(--text)">
         <span style="color:var(--text2);font-size:12px">→</span>
-        <input type="date" id="dash-hasta" onchange="renderDashboard()" style="padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface2);color:var(--text)">
+        <input type="date" id="dash-hasta" onchange="renderDashboard()" style="padding:5px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface2);color:var(--text)">
       </div>
       <select id="dash-vendedor" onchange="renderDashboard()"><option value="">Todos los vendedores</option></select>
       <select id="dash-comuna" onchange="renderDashboard()"><option value="">Todas las comunas</option></select>
-      <input type="text" id="dash-search" placeholder="🔍 Cliente..." oninput="renderDashboard()" style="min-width:140px">
+      <input type="text" id="dash-search" placeholder="🔍 Cliente..." oninput="renderDashboard()" style="min-width:120px">
     </div>
     <div class="dashboard-inner">
-      <!-- KPIs principales -->
+      <!-- KPIs calugas -->
       <div class="dash-calugas" id="dash-calugas"></div>
-      <!-- KPIs secundarios -->
       <div class="dash-calugas" id="dash-calugas2"></div>
-      <!-- Línea: ventas por día -->
-      <div class="chart-card">
-        <div class="chart-title">📈 Ventas netas por día — últimos 30 días</div>
-        <canvas id="chart-ventas" height="80"></canvas>
+      <!-- Pestañas: Top clientes / Detalle visitas -->
+      <div style="display:flex;gap:8px;margin:8px 0 4px">
+        <button onclick="setDashTab('resumen')" id="dash-tab-resumen" class="tab-btn active" style="font-size:13px;padding:6px 16px">Top clientes</button>
+        <button onclick="setDashTab('detalle')" id="dash-tab-detalle" class="tab-btn" style="font-size:13px;padding:6px 16px">📋 Detalle visitas</button>
       </div>
-      <!-- Fila de dos charts -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="chart-card">
-          <div class="chart-title">🏆 Top 10 clientes</div>
-          <canvas id="chart-clientes" height="180"></canvas>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">👤 Ventas por vendedor</div>
-          <canvas id="chart-vendedores" height="180"></canvas>
-        </div>
-      </div>
-      <!-- Tabla top clientes detalle -->
-      <!-- Toggle tabla: resumen vs detalle -->
-      <div style="display:flex;gap:8px;margin-bottom:4px">
-        <button onclick="setDashTab('resumen')" id="dash-tab-resumen" class="tab-btn active" style="font-size:12px;padding:5px 12px">Top clientes</button>
-        <button onclick="setDashTab('detalle')" id="dash-tab-detalle" class="tab-btn" style="font-size:12px;padding:5px 12px">📋 Detalle visitas</button>
-      </div>
+      <!-- Tabla top clientes -->
       <div class="chart-card" style="overflow-x:auto" id="dash-tabla-resumen">
-        <div class="chart-title">Top 20 clientes del período</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">#</th>
@@ -488,9 +462,10 @@
           <tbody id="dash-tabla-body"></tbody>
         </table>
       </div>
+      <!-- Tabla detalle visitas -->
       <div class="chart-card" style="overflow-x:auto;display:none" id="dash-tabla-detalle">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <div class="chart-title" style="margin-bottom:0">Detalle de visitas del período <span id="dash-detalle-count" style="font-size:12px;color:var(--text2)"></span></div>
+          <span style="font-size:13px;font-weight:600;color:var(--text)">Detalle visitas <span id="dash-detalle-count" style="font-size:12px;color:var(--text2);font-weight:400"></span></span>
           <select id="dash-detalle-tipo" onchange="renderDashDetalle()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px">
             <option value="">Venta + Visita</option>
             <option value="Venta">Solo Ventas</option>
@@ -511,6 +486,10 @@
           <tbody id="dash-detalle-body"></tbody>
         </table>
       </div>
+      <!-- Canvas ocultos para Charts (requeridos por renderDashboard) -->
+      <canvas id="chart-ventas" style="display:none"></canvas>
+      <canvas id="chart-clientes" style="display:none"></canvas>
+      <canvas id="chart-vendedores" style="display:none"></canvas>
     </div>
   </div>
 
@@ -939,7 +918,7 @@ function renderMapMarkers() {
   const comuna = document.getElementById('map-comuna').value;
   const status = document.getElementById('map-status').value;
   const vendedor = document.getElementById('map-vendedor').value;
-  const soloSeg = document.getElementById('switch-seguimiento').checked;
+  const soloSeg = true; // solo seguimiento
   
   const clients = Object.values(allClientsMap).filter(c => {
     if (!c.lat || !c.lng) return false;
@@ -1015,7 +994,7 @@ function getFilteredClients(prefix = 'list') {
   const comuna = document.getElementById(`${prefix}-comuna`)?.value || '';
   const status = document.getElementById(`${prefix}-status`)?.value || '';
   const vendedor = document.getElementById(`${prefix}-vendedor`)?.value || '';
-  const soloSeg = document.getElementById(`${prefix}-switch`)?.checked ?? true;
+  const soloSeg = true; // solo seguimiento
   
   return Object.values(allClientsMap).filter(c => {
     if (soloSeg && !c.enSeguimiento) return false;
@@ -1096,10 +1075,11 @@ function renderList() {
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
     const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
-    const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
+    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
+    const nuncaCompro = !c.ultimaCompra || c.ultimaCompra === '' || c.ultimaCompra.includes('1899');
     return `
-      <tr>
-        <td><div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nombre}">${c.nombre}</div></td>
+      <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
+        <td><div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.nombre}">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div></td>
         <td>${c.comuna || '—'}</td>
         <td>${c.ultimaVisita || '—'}</td>
         <td style="text-align:center">${c.diasSinContacto || '—'}</td>
@@ -1206,78 +1186,85 @@ function closeModal(e) {
 // ============================================================
 function renderAlerts() {
   const diasThreshold = parseInt(document.getElementById('alert-dias').value) || 30;
-  const visitasSinVenta = parseInt(document.getElementById('alert-visitas-sin-venta').value) || 3;
-  
+
   const clients = Object.values(allClientsMap).filter(c => c.enSeguimiento);
-  
+
+  function rowTabla(c, tag) {
+    const diasF = parseFloat(c.diasFaltantes);
+    const atrasado = !isNaN(diasF) && diasF < 0 ? Math.abs(Math.round(diasF)) : null;
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const colorSt = STATUS_COLORS[st] || '#64748b';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 8px;font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}</td>
+      <td style="padding:7px 8px;color:var(--text2);font-size:12px">${c.comuna || '—'}</td>
+      <td style="padding:7px 8px;color:var(--text2);font-size:12px">${c.vendedor || '—'}</td>
+      <td style="padding:7px 8px;font-size:12px">${c.frecuenciaIdeal ? 'F'+{7:'1',14:'2',21:'3'}[c.frecuenciaIdeal]+'('+c.frecuenciaIdeal+'d)' : '—'}</td>
+      <td style="padding:7px 8px;font-size:12px;color:var(--text2)">${c.ultimaVisita || '—'}</td>
+      <td style="padding:7px 8px;font-size:12px;color:var(--text2)">${c.ultimaCompra && !c.ultimaCompra.includes('1899') ? c.ultimaCompra : '—'}</td>
+      <td style="padding:7px 8px;text-align:right;font-size:12px;font-weight:600">${c.ticketPromedio > 0 ? '$'+Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—'}</td>
+      <td style="padding:7px 8px;text-align:center"><span style="background:${colorSt}22;color:${colorSt};border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;white-space:nowrap">${tag}</span></td>
+    </tr>`;
+  }
+
+  function tabla(rows, tagFn) {
+    return `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+      <thead><tr style="border-bottom:2px solid var(--border);background:var(--surface2)">
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Cliente</th>
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Comuna</th>
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Vendedor</th>
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Frec.</th>
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Últ. visita</th>
+        <th style="text-align:left;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Últ. compra</th>
+        <th style="text-align:right;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Ticket prom.</th>
+        <th style="text-align:center;padding:8px;color:var(--text2);font-weight:600;font-size:12px">Estado</th>
+      </tr></thead>
+      <tbody>${rows.map(c => rowTabla(c, tagFn(c))).join('')}</tbody>
+    </table></div>`;
+  }
+
   let html = '';
-  
-  // Cat 1: Fuera de frecuencia
+
+  // Cat 1: Fuera de frecuencia — ordenado por ticket promedio DESC
   const fueraFrec = clients.filter(c => {
-    if (c._nuncaVisitado) return false;  // excluir sin historial
     const d = parseFloat(c.diasFaltantes);
     return !isNaN(d) && d < 0;
-  }).sort((a,b) => parseFloat(a.diasFaltantes) - parseFloat(b.diasFaltantes));
-  
+  }).sort((a, b) => (b.ticketPromedio || 0) - (a.ticketPromedio || 0));
+
   if (fueraFrec.length) {
-    html += `<div class="section-title">⏰ Fuera de frecuencia ideal <span class="section-badge">${fueraFrec.length}</span></div>`;
-    fueraFrec.slice(0, 20).forEach(c => {
-      const diasF = parseFloat(c.diasFaltantes) || 0;
-      const dias = Math.abs(diasF);
-      const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
-      html += `<div class="alert-card">
-        <div class="alert-icon">⚠️</div>
-        <div class="alert-info">
-          <div class="alert-name">${c.nombre}</div>
-          <div class="alert-detail">${c.comuna} · Último contacto: ${c.ultimaVisita || '—'} · Vendedor: ${c.vendedor || '—'}</div>
-          <div class="alert-detail">Ticket promedio: ${c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—'}</div>
-        </div>
-        <span class="alert-badge badge badge-${st}">${c._nuncaVisitado ? 'Sin visita' : Math.abs(diasF) + ' días atrasado'}</span>
-      </div>`;
+    html += `<div class="section-title">⏰ Fuera de frecuencia <span class="section-badge">${fueraFrec.length}</span></div>`;
+    html += tabla(fueraFrec, c => {
+      const d = Math.abs(Math.round(parseFloat(c.diasFaltantes)));
+      return d + 'd atraso';
     });
-    if (fueraFrec.length > 20) html += `<div style="color:#8b90b0;font-size:13px;padding:8px 16px">... y ${fueraFrec.length - 20} más</div>`;
-    html += '<div style="height:24px"></div>';
+    html += '<div style="height:20px"></div>';
   }
-  
-  // Cat 2: Sin contacto hace más de N días
+
+  // Cat 2: Sin contacto > N días — ordenado por ticket promedio DESC
   const sinContacto = clients.filter(c => {
     const d = parseFloat(c.diasSinContacto);
     return !isNaN(d) && d > diasThreshold;
-  }).sort((a,b) => parseFloat(b.diasSinContacto) - parseFloat(a.diasSinContacto));
-  
+  }).sort((a, b) => (b.ticketPromedio || 0) - (a.ticketPromedio || 0));
+
   if (sinContacto.length) {
-    html += `<div class="section-title">📵 Sin contacto más de ${diasThreshold} días <span class="section-badge">${sinContacto.length}</span></div>`;
-    sinContacto.slice(0,15).forEach(c => {
-      html += `<div class="alert-card">
-        <div class="alert-icon">📵</div>
-        <div class="alert-info">
-          <div class="alert-name">${c.nombre}</div>
-          <div class="alert-detail">${c.comuna} · Vendedor: ${c.vendedor || '—'}</div>
-        </div>
-        <span class="alert-badge" style="background:rgba(239,68,68,0.2);color:#f87171">${c.diasSinContacto} días</span>
-      </div>`;
-    });
-    html += '<div style="height:24px"></div>';
+    html += `<div class="section-title">📵 Sin contacto +${diasThreshold} días <span class="section-badge">${sinContacto.length}</span></div>`;
+    html += tabla(sinContacto, c => Math.round(parseFloat(c.diasSinContacto)) + ' días');
+    html += '<div style="height:20px"></div>';
   }
-  
-  // Cat 3: Nunca han comprado
-  const nuncaCompro = clients.filter(c => !c.ultimaCompra || c.ultimaCompra === '');
+
+  // Cat 3: Nunca han comprado (fecha 1899 o sin compra) — ordenado por nombre
+  const nuncaCompro = clients.filter(c => {
+    const uc = c.ultimaCompra || '';
+    return !uc || uc.includes('1899') || uc === '';
+  }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
   if (nuncaCompro.length) {
-    html += `<div class="section-title">🛒 Nunca han comprado <span class="section-badge">${nuncaCompro.length}</span></div>`;
-    nuncaCompro.slice(0,10).forEach(c => {
-      html += `<div class="alert-card">
-        <div class="alert-icon">🛒</div>
-        <div class="alert-info">
-          <div class="alert-name">${c.nombre}</div>
-          <div class="alert-detail">${c.comuna} · Visitas: ${c.visitas.length}</div>
-        </div>
-        <span class="alert-badge" style="background:rgba(100,116,139,0.2);color:#94a3b8">Solo visitas</span>
-      </div>`;
-    });
+    html += `<div class="section-title">🛒 Sin compras registradas <span class="section-badge">${nuncaCompro.length}</span></div>`;
+    html += tabla(nuncaCompro, () => 'Solo visitas');
+    html += '<div style="height:20px"></div>';
   }
-  
+
   if (!html) html = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin alertas activas</div></div>';
-  
   document.getElementById('alerts-body').innerHTML = html;
 }
 
@@ -1524,27 +1511,7 @@ function renderDashboard() {
   const chartData = chartLabels.map(k => dailyMap[k] || 0);
   const metaDiaLine = Array(30).fill(metaDia);
   
-  if (chartVentas) chartVentas.destroy();
-  const ctx1 = document.getElementById('chart-ventas').getContext('2d');
-  chartVentas = new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: chartLabels,
-      datasets: [
-        { label: 'Venta neta', data: chartData, backgroundColor: chartData.map(v => v > 0 ? '#4f6ef7' : '#e5e7eb'), borderRadius: 3 },
-        { label: 'Meta/día', data: metaDiaLine, type: 'line', borderColor: '#ef4444', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, fill: false }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: true, labels: { font: { size: 11 }, boxWidth: 20 } } },
-      scales: {
-        x: { ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#e5e7eb' } },
-        y: { ticks: { color: '#6b7280', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#e5e7eb' } }
-      }
-    }
-  });
-  
+  // Charts desactivados (canvas ocultos, no se necesitan)
   // Top 10 clientes
   const clientMap = {};
   const clientData = {};
@@ -1558,26 +1525,7 @@ function renderDashboard() {
   const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
   const top20 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,20);
   
-  if (chartClientes) chartClientes.destroy();
-  const ctx2 = document.getElementById('chart-clientes').getContext('2d');
-  chartClientes = new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: top10.map(x => x[0].substring(0,22)),
-      datasets: [{ label: 'Total neto', data: top10.map(x => x[1]), backgroundColor: '#7c3aed', borderRadius: 4 }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: '#6b7280', callback: v => '$' + Math.round(v/1000) + 'k' }, grid: { color: '#e5e7eb' } },
-        y: { ticks: { color: '#1a1d2e', font: { size: 10 } }, grid: { color: '#e5e7eb' } }
-      }
-    }
-  });
-
-  // Chart por vendedor
+  // Chart vendedores
   const vendMap = {};
   ventasFiltradas.forEach(v => {
     const vend = v['salesman_name'] || 'Otro';
@@ -1586,24 +1534,6 @@ function renderDashboard() {
   const vendEntries = Object.entries(vendMap).sort((a,b) => b[1]-a[1]);
   const COLORS_VEND = ['#4f6ef7','#7c3aed','#16a34a','#ea580c','#0891b2','#db2777'];
   
-  if (!window.chartVendedores) window.chartVendedores = null;
-  if (window.chartVendedores) window.chartVendedores.destroy();
-  const ctx3 = document.getElementById('chart-vendedores').getContext('2d');
-  window.chartVendedores = new Chart(ctx3, {
-    type: 'doughnut',
-    data: {
-      labels: vendEntries.map(x => x[0]),
-      datasets: [{ data: vendEntries.map(x => x[1]), backgroundColor: COLORS_VEND, borderWidth: 2, borderColor: '#fff' }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => '$' + Math.round(ctx.parsed).toLocaleString('es-CL') } }
-      }
-    }
-  });
-
   // Si está en tab detalle, actualizar tabla detalle
   if (dashTab === 'detalle') renderDashDetalle();
 
