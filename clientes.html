@@ -372,6 +372,15 @@
         <option value="critical">⚫ Crítico</option>
       </select>
       <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
+      <select id="list-nivel-ventas" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px">
+        <option value="">$ Todos</option>
+        <option value="gt100000">Mayor $100k</option>
+        <option value="gt50000">Mayor $50k</option>
+        <option value="gt20000">Mayor $20k</option>
+        <option value="gt10000">Mayor $10k</option>
+        <option value="lt10000">Menor $10k</option>
+        <option value="sin_venta">Sin ventas</option>
+      </select>
       <div class="switch-wrap">
         <span class="switch-label">Seguimiento</span>
         <label class="switch">
@@ -419,13 +428,24 @@
 
   <!-- ===== DASHBOARD VIEW ===== -->
   <div class="view" id="view-dashboard">
-    <div class="filter-bar">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+      <!-- Período rápido -->
+      <div id="dash-periodos" style="display:flex;gap:4px">
+        <button class="periodo-btn active" data-periodo="hoy" onclick="setPeriodo(this)">Hoy</button>
+        <button class="periodo-btn" data-periodo="semana" onclick="setPeriodo(this)">Semana</button>
+        <button class="periodo-btn" data-periodo="mes" onclick="setPeriodo(this)">Mes</button>
+        <button class="periodo-btn" data-periodo="anio" onclick="setPeriodo(this)">Año</button>
+        <button class="periodo-btn" data-periodo="custom" onclick="setPeriodo(this)">📅 Custom</button>
+      </div>
+      <!-- Fechas custom (ocultas por defecto) -->
+      <div id="dash-custom-dates" style="display:none;gap:6px;align-items:center;display:none">
+        <input type="date" id="dash-desde" onchange="renderDashboard()" style="padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface2);color:var(--text)">
+        <span style="color:var(--text2);font-size:12px">→</span>
+        <input type="date" id="dash-hasta" onchange="renderDashboard()" style="padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--surface2);color:var(--text)">
+      </div>
       <select id="dash-vendedor" onchange="renderDashboard()"><option value="">Todos los vendedores</option></select>
       <select id="dash-comuna" onchange="renderDashboard()"><option value="">Todas las comunas</option></select>
-      <input type="text" id="dash-search" placeholder="🔍 Cliente..." oninput="renderDashboard()" style="min-width:150px">
-      <input type="date" id="dash-desde" onchange="renderDashboard()">
-      <input type="date" id="dash-hasta" onchange="renderDashboard()">
-      <button onclick="resetDashDates()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:7px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;font-family:inherit;">Limpiar</button>
+      <input type="text" id="dash-search" placeholder="🔍 Cliente..." oninput="renderDashboard()" style="min-width:140px">
     </div>
     <div class="dashboard-inner">
       <!-- KPIs principales -->
@@ -449,9 +469,14 @@
         </div>
       </div>
       <!-- Tabla top clientes detalle -->
-      <div class="chart-card" style="overflow-x:auto">
-        <div class="chart-title">📋 Detalle top 20 clientes del período</div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px" id="dash-tabla">
+      <!-- Toggle tabla: resumen vs detalle -->
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <button onclick="setDashTab('resumen')" id="dash-tab-resumen" class="tab-btn active" style="font-size:12px;padding:5px 12px">Top clientes</button>
+        <button onclick="setDashTab('detalle')" id="dash-tab-detalle" class="tab-btn" style="font-size:12px;padding:5px 12px">📋 Detalle visitas</button>
+      </div>
+      <div class="chart-card" style="overflow-x:auto" id="dash-tabla-resumen">
+        <div class="chart-title">Top 20 clientes del período</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead><tr style="border-bottom:2px solid var(--border)">
             <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">#</th>
             <th style="text-align:left;padding:8px 6px;color:var(--text2);font-weight:500">Cliente</th>
@@ -461,6 +486,29 @@
             <th style="text-align:right;padding:8px 6px;color:var(--text2);font-weight:500">Ticket prom.</th>
           </tr></thead>
           <tbody id="dash-tabla-body"></tbody>
+        </table>
+      </div>
+      <div class="chart-card" style="overflow-x:auto;display:none" id="dash-tabla-detalle">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="chart-title" style="margin-bottom:0">Detalle de visitas del período <span id="dash-detalle-count" style="font-size:12px;color:var(--text2)"></span></div>
+          <select id="dash-detalle-tipo" onchange="renderDashDetalle()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:4px 8px;font-size:12px">
+            <option value="">Venta + Visita</option>
+            <option value="Venta">Solo Ventas</option>
+            <option value="Visita">Solo Visitas</option>
+          </select>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Fecha</th>
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Hora</th>
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Cliente</th>
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Vendedor</th>
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Tipo</th>
+            <th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:500">Monto</th>
+            <th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:500">Dist.</th>
+            <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Comentario</th>
+          </tr></thead>
+          <tbody id="dash-detalle-body"></tbody>
         </table>
       </div>
     </div>
@@ -732,7 +780,8 @@ function buildAllClientsMap() {
     const lng = parseFloat(cs['Lng']);
     let ticketNum = 0;
     const ticketStr = String(cs['Ticket_Promedio'] || '');
-    ticketNum = parseFloat(ticketStr.replace(/[$.,\s]/g, '').replace(',', '.')) || 0;
+    // Formato: "$22,186.43" — quitar $ y separadores de miles (,), dejar punto decimal
+    ticketNum = parseFloat(ticketStr.replace(/[$,\s]/g, '')) || 0;
     const diasRaw = String(cs['Días Faltantes'] || '').replace(/,/g,''); const dias = diasRaw !== '' ? parseFloat(diasRaw) : null;
 
     if (allClientsMap[code]) {
@@ -774,6 +823,37 @@ function buildAllClientsMap() {
         visitas: []
       };
     }
+  });
+
+  // 3. Agregar clientes de visitasData que no están en seguimiento ni en rutas
+  //    (clientes del universo total que han comprado alguna vez)
+  const clientesVistos = new Set();
+  visitasData.forEach(v => {
+    const code = String(v['client_code'] || v['client_id'] || '').trim();
+    if (!code || allClientsMap[code]) return;
+    if (clientesVistos.has(code)) return;
+    clientesVistos.add(code);
+    const lat = parseFloat(v['address_latitude'] || v['lat_cliente'] || '');
+    const lng = parseFloat(v['address_longitude'] || v['lng_cliente'] || '');
+    if (isNaN(lat) || isNaN(lng)) return; // sin coords no se puede pintar en mapa
+    allClientsMap[code] = {
+      codigo: code,
+      nombre: v['client_name'] || '',
+      direccion: v['address_street'] || v['address'] || '',
+      comuna: normalizeComuna(v['locality'] || ''),
+      lat, lng,
+      camion: '', vendedorRuta: '', dia: '', semana: '',
+      ultimaVisita: v['Fecha Visita'] || v['date'] || '',
+      ultimaCompra: '',
+      diasSinContacto: null,
+      ticketPromedio: 0,
+      vendedor: v['salesman_name'] || '',
+      frecuenciaIdeal: null,
+      diasFaltantes: null,
+      kmUltimo: '',
+      enSeguimiento: false,
+      visitas: []
+    };
   });
 }
 
@@ -973,11 +1053,12 @@ function renderList() {
   });
   
   // Calugas
-  const counts = { ok:0, green:0, yellow:0, red:0, critical:0 };
+  const counts = { ok:0, green:0, yellow:0, red:0, critical:0, nodata:0 };
   let totalFueraFrecuencia = 0, ticketSumFuera = 0;
   clients.forEach(c => {
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     if (counts[st] !== undefined) counts[st]++;
+    if (c._nuncaVisitado) counts.nodata++; // asegura que nuncaVisitado no se pierda
     if (['yellow','red','critical'].includes(st)) {
       totalFueraFrecuencia++;
       ticketSumFuera += c.ticketPromedio || 0;
@@ -994,6 +1075,8 @@ function renderList() {
     <div class="caluga yellow"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
     <div class="caluga red"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
     <div class="caluga critical"><div class="caluga-num" style="color:#dc2626">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
+    <div class="caluga" style="min-width:90px"><div class="caluga-num" style="color:#64748b">${counts.nodata}</div><div class="caluga-label">⚪ Sin visita</div></div>
+    <div class="caluga" style="min-width:90px;border-left:2px solid var(--border)"><div class="caluga-num" style="color:var(--text);font-size:16px">${clients.length}</div><div class="caluga-label">📊 Total</div></div>
     <div class="caluga" style="border-left:3px solid #eab308;min-width:200px">
       <div class="caluga-label">Fuera de frecuencia</div>
       <div class="caluga-num" style="color:#eab308">${totalFueraFrecuencia}</div>
@@ -1201,9 +1284,60 @@ function renderAlerts() {
 // ============================================================
 // DASHBOARD
 // ============================================================
+
+// ============================================================
+// DASHBOARD HELPERS
+// ============================================================
+let dashPeriodo = 'hoy';
+
+function setPeriodo(btn) {
+  dashPeriodo = btn.dataset.periodo;
+  document.querySelectorAll('.periodo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customDiv = document.getElementById('dash-custom-dates');
+  if (customDiv) customDiv.style.display = dashPeriodo === 'custom' ? 'flex' : 'none';
+  renderDashboard();
+}
+
+let dashTab = 'resumen';
+function setDashTab(tab) {
+  dashTab = tab;
+  document.getElementById('dash-tab-resumen').classList.toggle('active', tab === 'resumen');
+  document.getElementById('dash-tab-detalle').classList.toggle('active', tab === 'detalle');
+  document.getElementById('dash-tabla-resumen').style.display = tab === 'resumen' ? 'block' : 'none';
+  document.getElementById('dash-tabla-detalle').style.display = tab === 'detalle' ? 'block' : 'none';
+  if (tab === 'detalle') renderDashDetalle();
+}
+
+let _detalleData = [];
+function renderDashDetalle() {
+  const tipo = (document.getElementById('dash-detalle-tipo') || {}).value || '';
+  const rows = tipo ? _detalleData.filter(v => v['Visita/Venta'] === tipo) : _detalleData;
+  const tbody = document.getElementById('dash-detalle-body');
+  const countEl = document.getElementById('dash-detalle-count');
+  if (countEl) countEl.textContent = '(' + rows.length + ' registros)';
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(v => {
+    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0;
+    const dist = parseFloat(v['Distancia'] || '') || 0;
+    const esVenta = v['Visita/Venta'] === 'Venta';
+    const anomalia = dist > 2;
+    return `<tr style="border-bottom:1px solid var(--border);${anomalia?'background:rgba(220,38,38,0.04)':''}">
+      <td style="padding:6px">${v['Fecha Visita'] || ''}</td>
+      <td style="padding:6px;color:var(--text2)">${v['Hora'] || ''}</td>
+      <td style="padding:6px;font-weight:500">${v['client_name'] || '—'}</td>
+      <td style="padding:6px;color:var(--text2)">${v['salesman_name'] || '—'}</td>
+      <td style="padding:6px"><span style="background:${esVenta?'rgba(22,163,74,0.12)':'rgba(59,130,246,0.1)'};color:${esVenta?'#16a34a':'#2563eb'};border-radius:4px;padding:2px 6px;font-size:11px">${v['Visita/Venta'] || '—'}</span></td>
+      <td style="padding:6px;text-align:right;font-weight:600;color:${esVenta?'var(--accent)':'var(--text2)'}">${esVenta ? '$'+Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+      <td style="padding:6px;text-align:right;color:${anomalia?'#dc2626':'var(--text2)'};font-weight:${anomalia?'700':'400'}">${dist > 0 ? dist.toFixed(1)+'km' : '—'}${anomalia?' ⚠️':''}</td>
+      <td style="padding:6px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(v['comments'] || '').replace(/"/g,''')}">${v['comments'] || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+}
+
 function resetDashDates() {
-  document.getElementById('dash-desde').value = '';
-  document.getElementById('dash-hasta').value = '';
+  if (document.getElementById('dash-desde')) document.getElementById('dash-desde').value = '';
+  if (document.getElementById('dash-hasta')) document.getElementById('dash-hasta').value = '';
   renderDashboard();
 }
 
@@ -1231,40 +1365,67 @@ function renderDashboard() {
   
   function parseMonto(v) { return parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0; }
   
+  // Calcular rango de fechas según período seleccionado
+  let periodoDesde = null, periodoHasta = null;
+  if (dashPeriodo === 'hoy') {
+    periodoDesde = startOfDay; periodoHasta = null;
+  } else if (dashPeriodo === 'semana') {
+    periodoDesde = startOfWeek; periodoHasta = null;
+  } else if (dashPeriodo === 'mes') {
+    periodoDesde = startOfMonth; periodoHasta = null;
+  } else if (dashPeriodo === 'anio') {
+    periodoDesde = new Date(now.getFullYear(), 0, 1); periodoHasta = null;
+  } else if (dashPeriodo === 'custom') {
+    periodoDesde = desde; periodoHasta = hasta;
+  }
+
   let todasVisitas = visitasData.filter(v => {
-    if (v['Visita/Venta'] !== 'Venta') return false;
-    if (!parseMonto(v)) return false;
+    if (!parseMonto(v) && v['Visita/Venta'] !== 'Visita') return false;
     if (vendedor && v['salesman_name'] !== vendedor) return false;
     if (comuna && normalizeComuna(v['locality']) !== comuna) return false;
     if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
     return true;
   });
 
-  // Ventas del período filtrado por fechas (para charts)
-  let ventasFiltradas = todasVisitas.filter(v => {
+  // Visitas del período (incluye visitas y ventas para tabla detalle)
+  let visitasPeriodo = todasVisitas.filter(v => {
     const fecha = parseDate(v['Fecha Visita']);
-    if (desde && fecha && fecha < desde) return false;
-    if (hasta && fecha && fecha > hasta) return false;
+    if (periodoDesde && fecha && fecha < periodoDesde) return false;
+    if (periodoHasta && fecha && fecha > periodoHasta) return false;
+    return true;
+  }).sort((a,b) => {
+    const fa = parseDate(a['Fecha Visita']), fb = parseDate(b['Fecha Visita']);
+    return (fb || 0) - (fa || 0);
+  });
+
+  // Solo ventas para cálculos de KPIs y charts
+  let ventasFiltradas = visitasPeriodo.filter(v => {
+    if (v['Visita/Venta'] !== 'Venta') return false;
+    if (!parseMonto(v)) return false;
     return true;
   });
 
-  // KPIs siempre en base a períodos fijos (hoy / semana / mes) sin importar filtro de fechas
-  const totalDia = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+  // Guardar para tabla detalle
+  _detalleData = visitasPeriodo;
+
+  // KPIs siempre en base a períodos fijos - solo ventas con monto
+  const soloVentas = todasVisitas.filter(v => v['Visita/Venta'] === 'Venta' && parseMonto(v) > 0);
+  const totalDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
     .reduce((s,v) => s + parseMonto(v), 0);
-  const totalSemana = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+  const totalSemana = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
     .reduce((s,v) => s + parseMonto(v), 0);
-  const totalMes = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+  const totalMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
     .reduce((s,v) => s + parseMonto(v), 0);
-  const totalMesAnterior = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
+  const totalMesAnterior = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
     .reduce((s,v) => s + parseMonto(v), 0);
   
   // Pedidos y tickets
-  const pedidosDia = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
-  const pedidosMes = todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
+  const pedidosDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
+  const pedidosMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
   const ticketPromMes = pedidosMes ? Math.round(totalMes / pedidosMes) : 0;
   
   // Clientes únicos del mes
-  const clientesUnicos = new Set(todasVisitas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
+  const clientesUnicos = new Set(soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
   
   // Días hábiles transcurridos en el mes (aprox)
   const diasMes = startOfDay.getDate();
@@ -1442,6 +1603,9 @@ function renderDashboard() {
       }
     }
   });
+
+  // Si está en tab detalle, actualizar tabla detalle
+  if (dashTab === 'detalle') renderDashDetalle();
 
   // Tabla top 20
   const tbody = document.getElementById('dash-tabla-body');
