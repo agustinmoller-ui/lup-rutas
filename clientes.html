@@ -201,6 +201,7 @@
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 2000;
     display: flex; align-items: center; justify-content: center; padding: 16px;
+    -webkit-tap-highlight-color: transparent;
   }
   .modal {
     background: var(--surface); border: 1px solid var(--border);
@@ -657,7 +658,7 @@
 </div>
 
 <!-- HISTORIAL MODAL -->
-<div class="modal-overlay" id="modal" style="display:none" onclick="closeModal(event)" ontouchend="event.stopPropagation()">
+<div class="modal-overlay" id="modal" style="display:none;visibility:hidden;pointer-events:none" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <div>
@@ -1496,28 +1497,32 @@ function openHistorial(codigo) {
     </tr>`;
   }).join('');
   
-  document.getElementById('modal').style.display = 'flex';
+  const modalEl = document.getElementById('modal');
+  modalEl.style.display = 'flex';
+  modalEl.style.visibility = 'visible';
+  modalEl.style.pointerEvents = 'auto';
 }
 
 let _modalJustClosed = false;
 function closeModal(e) {
+  // Cerrar si se clickea el overlay (fondo) o si se llama sin evento (botón X)
   if (!e || e.target === document.getElementById('modal')) {
-    // Marcar que el modal acaba de cerrarse para bloquear toggleFilters
-    _modalJustClosed = true;
-    setTimeout(() => { _modalJustClosed = false; }, 400);
-    
-    document.getElementById('modal').style.display = 'none';
+    const modalEl2 = document.getElementById('modal');
+    // Desactivar inmediatamente los eventos del modal para no interferir con lo que hay detrás
+    modalEl2.style.pointerEvents = 'none';
+    modalEl2.style.visibility = 'hidden';
+    modalEl2.style.display = 'none';
     if (chartHist) { chartHist.destroy(); chartHist = null; }
     
-    // Restaurar shared-filter si la vista activa es mapa o lista
+    // Restaurar shared-filter
     const activeView = document.querySelector('.view.active')?.id;
     if (activeView === 'view-map' || activeView === 'view-list') {
       const sf = document.getElementById('shared-filter');
       const sc = document.getElementById('shared-calugas');
       const arrow = document.getElementById('filter-arrow');
-      if (sf) { sf.style.display = 'flex'; }
-      if (sc) { sc.style.display = 'flex'; }
-      if (arrow) { arrow.textContent = '▲'; }
+      if (sf) sf.style.display = 'flex';
+      if (sc) sc.style.display = 'flex';
+      if (arrow) arrow.textContent = '▲';
     }
   }
 }
