@@ -123,15 +123,18 @@
 
   /* LEGEND */
   .map-legend {
-    position: absolute; bottom: 24px; left: 16px; z-index: 999;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 12px 14px;
-    display: flex; flex-direction: column; gap: 6px;
+    position: absolute; bottom: 24px; right: 10px; z-index: 999;
+    background: rgba(255,255,255,0.93);
+    border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 12px;
+    display: flex; flex-direction: column; gap: 4px;
     box-shadow: var(--shadow);
+    font-size: 11px;
+    backdrop-filter: blur(3px);
   }
   .legend-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
   .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
   /* MAP STATS */
   .map-stats {
@@ -287,61 +290,99 @@
   @media(max-width:700px){
 
     /* NAV */
-    nav { padding: 0 10px; gap: 6px; min-height: 48px; }
+    nav { padding: 0 10px; gap: 6px; min-height: 44px; }
     .nav-logo { font-size: 15px; }
-    .nav-tabs { gap: 2px; overflow-x: auto; flex-shrink: 1; -webkit-overflow-scrolling: touch; }
+    .nav-tabs { gap: 2px; overflow-x: auto; flex-shrink: 1; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
     .tab-btn { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
-    .nav-right { gap: 6px; flex-shrink: 0; }
+    .nav-right { gap: 4px; flex-shrink: 0; }
     .role-badge { display: none; }
     #last-update { display: none !important; }
 
-    /* FILTER BAR — apilar en columna */
-    .filter-bar { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; }
-    .filter-bar input, .filter-bar select { width: 100%; min-width: unset; box-sizing: border-box; font-size: 14px; padding: 8px 10px; }
-    .switch-wrap { display: none; } /* ocultar switch Todos — ya fijamos soloSeg=true */
+    /* FILTER BAR — compacto horizontal con scroll */
+    .filter-bar {
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 8px;
+    }
+    .filter-bar input,
+    .filter-bar select {
+      flex: 1 1 calc(50% - 4px);
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      font-size: 13px;
+      padding: 5px 8px;
+      height: 32px;
+      border-radius: 8px;
+    }
+    .filter-bar input[type="text"] {
+      flex: 1 1 100%;
+    }
+    .switch-wrap { display: none; }
+    .config-label { font-size: 12px; }
+    .config-input { width: 52px; font-size: 13px; padding: 4px 6px; }
 
-    /* MAPA */
-    .map-legend { bottom: 60px; right: 8px; font-size: 11px; padding: 6px 8px; }
+    /* MAPA — leyenda mini, flotante, colapsable */
+    .map-legend {
+      bottom: auto;
+      top: 8px;
+      right: 8px;
+      font-size: 10px;
+      padding: 5px 8px;
+      gap: 3px;
+      opacity: 0.88;
+      max-width: 130px;
+    }
+    .legend-title { font-size: 10px; margin-bottom: 3px; letter-spacing: 0.3px; }
+    .legend-row { font-size: 10px; gap: 4px; }
+    .legend-dot { width: 8px; height: 8px; }
     .map-stats { display: none; }
     .leaflet-control-zoom { display: none; }
 
-    /* LISTA — convertir tabla a tarjetas */
-    .calugas-row { padding: 8px 10px; gap: 8px; }
-    .caluga { min-width: 80px; padding: 10px 12px; }
-    .caluga-num { font-size: 20px; }
+    /* LISTA — tarjetas */
+    .calugas-row { padding: 6px 8px; gap: 6px; overflow-x: auto; flex-wrap: nowrap; }
+    .caluga { min-width: 70px; padding: 8px 10px; flex-shrink: 0; }
+    .caluga-num { font-size: 18px; }
+    .caluga-label { font-size: 10px; }
+    .caluga-sub, .caluga-lost { font-size: 10px; }
     #main-table thead { display: none; }
-    #main-table tr { display: block; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; padding: 10px 12px; background: var(--surface); }
-    #main-table td { display: flex; justify-content: space-between; align-items: flex-start; padding: 3px 0; font-size: 13px; border: none; }
+    #main-table tr { display: block; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; padding: 10px 12px; background: var(--surface); }
+    #main-table td { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 13px; border: none; gap: 6px; }
     #main-table td:empty { display: none; }
-    #main-table td::before { content: attr(data-label); color: var(--text2); font-size: 11px; font-weight: 500; min-width: 90px; flex-shrink: 0; }
-    #main-table td:first-child { font-size: 14px; font-weight: 600; flex-direction: column; gap: 2px; }
+    #main-table td::before { content: attr(data-label); color: var(--text2); font-size: 11px; font-weight: 500; min-width: 80px; flex-shrink: 0; }
+    #main-table td:first-child { font-size: 13px; font-weight: 600; flex-direction: column; align-items: flex-start; gap: 2px; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
     #main-table td:first-child::before { display: none; }
     .hist-btn { font-size: 12px; padding: 4px 10px; }
     .link-btn { font-size: 14px; }
-    .list-view-inner { padding: 8px 10px; }
+    .list-view-inner { padding: 6px 8px; }
+    .table-wrap { border: none; background: transparent; }
 
-    /* ALERTAS — tabla con scroll horizontal */
-    #alerts-body { padding: 8px; }
-    .section-title { font-size: 14px; }
-    .alert-card { padding: 10px; gap: 8px; }
+    /* ALERTAS */
+    #alerts-body { padding: 6px 8px; }
+    .section-title { font-size: 13px; }
+    .alert-card { padding: 8px 10px; gap: 6px; }
     .alert-name { font-size: 13px; }
     .alert-detail { font-size: 11px; }
-    
-    /* DASHBOARD */
-    .dashboard-inner { padding: 8px 10px; }
-    .dash-calugas { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
-    .dash-caluga, .dash-calugas > div { padding: 10px 12px; }
-    #dash-periodos { flex-wrap: wrap; gap: 4px; }
-    .periodo-btn { font-size: 12px; padding: 5px 10px; }
-    
-    /* MODAL */
-    .modal-content { max-width: 100%; width: 100%; margin: 0; border-radius: 16px 16px 0 0; position: fixed; bottom: 0; left: 0; right: 0; max-height: 85dvh; }
-    .modal-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
-    .modal-header { padding: 14px 16px; }
-    .modal-body { padding: 12px 16px; }
 
-    /* CALUGAS DE ESTADO en lista */
-    .calugas-row { overflow-x: auto; flex-wrap: nowrap; }
+    /* DASHBOARD */
+    .dashboard-inner { padding: 6px 8px; }
+    .dash-calugas { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+    .dash-calugas > div { padding: 10px 12px; }
+    #dash-periodos { flex-wrap: wrap; gap: 3px; }
+    .periodo-btn { font-size: 12px; padding: 4px 10px; }
+
+    /* MODAL — bottom sheet */
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal-content { max-width: 100%; width: 100%; margin: 0; border-radius: 16px 16px 0 0; max-height: 85dvh; }
+    .modal-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .modal-header { padding: 12px 16px; }
+    .modal-body { padding: 10px 14px; }
+
+    /* POPUP MAPA */
+    .popup-inner { padding: 10px 12px; min-width: 160px; max-width: 240px; }
+    .popup-grid { grid-template-columns: 1fr 1fr; }
   }
 </style>
 </head>
