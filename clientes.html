@@ -349,17 +349,12 @@
     .caluga-num { font-size: 18px; }
     .caluga-label { font-size: 10px; }
     .caluga-sub, .caluga-lost { font-size: 10px; }
-    #main-table thead { display: none; }
-    #main-table tr { display: block; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; padding: 10px 12px; background: var(--surface); }
-    #main-table td { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 13px; border: none; gap: 6px; }
-    #main-table td:empty { display: none; }
-    #main-table td::before { content: attr(data-label); color: var(--text2); font-size: 11px; font-weight: 500; min-width: 80px; flex-shrink: 0; }
-    #main-table td:first-child { font-size: 13px; font-weight: 600; flex-direction: column; align-items: flex-start; gap: 2px; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
-    #main-table td:first-child::before { display: none; }
+    #main-table { display: none; }
+    #list-cards { display: block; }
     .hist-btn { font-size: 12px; padding: 4px 10px; }
     .link-btn { font-size: 14px; }
     .list-view-inner { padding: 6px 8px; }
-    .table-wrap { border: none; background: transparent; }
+    .table-wrap { display: none; }
 
     /* ALERTAS */
     #alerts-body { padding: 6px 8px; }
@@ -482,6 +477,8 @@
     </div>
     <div class="calugas-row" id="list-calugas"></div>
     <div class="list-view-inner">
+      <!-- Tarjetas para móvil (se muestra con CSS en <700px) -->
+      <div id="list-cards" style="display:none"></div>
       <div class="table-wrap">
         <table id="main-table">
           <thead>
@@ -1166,21 +1163,30 @@ function renderList() {
     return;
   }
   
-  tbody.innerHTML = clients.map(c => {
+  // Helper compartido para datos de fila
+  function clientRowData(c) {
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
     const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
-    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
+    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : null;
     const nuncaCompro = !c.ultimaCompra || c.ultimaCompra === '' || c.ultimaCompra.includes('1899');
+    const COLORS = {ok:'#3b82f6',green:'#22c55e',yellow:'#eab308',red:'#ef4444',critical:'#7f1d1d',nodata:'#94a3b8',noseg:'#94a3b8'};
+    return { st, badgeClass, diasStr, ticketStr, nuncaCompro, stColor: COLORS[st] || '#94a3b8' };
+  }
+
+  // Tabla desktop
+  tbody.innerHTML = clients.map(c => {
+    const { st, badgeClass, diasStr, ticketStr, nuncaCompro } = clientRowData(c);
+    const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
     return `
       <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
         <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
-        <td data-label="Estado"><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
-        <td data-label="Últ. visita">${c.ultimaVisita || '—'}</td>
-        <td data-label="Días sin contacto" style="text-align:center">${c.diasSinContacto || '—'}</td>
-        <td data-label="Frecuencia" style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
-        <td data-label="Ticket prom.">${ticketStr}</td>
-        <td data-label=" ">
+        <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
+        <td>${c.ultimaVisita || '—'}</td>
+        <td style="text-align:center">${c.diasSinContacto || '—'}</td>
+        <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td>${tStr}</td>
+        <td>
           <div style="display:flex;gap:6px">
             ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
             <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
@@ -1188,6 +1194,31 @@ function renderList() {
         </td>
       </tr>`;
   }).join('');
+
+  // Tarjetas móvil (estilo alert-card, visibles solo en <700px via CSS)
+  const cardsEl = document.getElementById('list-cards');
+  if (cardsEl) {
+    cardsEl.innerHTML = clients.map(c => {
+      const { st, badgeClass, diasStr, ticketStr, stColor } = clientRowData(c);
+      return `<div class="alert-card" style="border-left:3px solid ${stColor}">
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'}</div>
+          <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
+            <span class="${badgeClass}" style="font-size:11px">${diasStr} ${STATUS_LABELS[st]}</span>
+            <span style="font-size:11px;color:var(--text2)">📅 ${c.ultimaVisita || 'Sin visita'}</span>
+            <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
+            ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
+            ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+          ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
+          <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
 
 // ============================================================
