@@ -307,15 +307,19 @@
       padding: 6px 8px;
     }
     .filter-bar input,
-    .filter-bar select {
+    .filter-bar select,
+    .filter-bar .slider-wrap {
       flex: 1 1 calc(50% - 4px);
       min-width: 0;
       max-width: 100%;
       box-sizing: border-box;
       font-size: 13px;
       padding: 5px 8px;
-      height: 32px;
+      height: auto;
       border-radius: 8px;
+    }
+    .filter-bar .slider-wrap {
+      padding: 5px 10px;
     }
     .filter-bar input[type="text"] {
       flex: 1 1 100%;
@@ -461,7 +465,7 @@
         <option value="critical">⚫ Crítico</option>
       </select>
       <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
           <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
           <span id="ticket-slider-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
