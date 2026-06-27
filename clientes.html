@@ -442,7 +442,7 @@
         </div>
         <input type="range" id="shared-ticket-slider" min="0" max="200000" step="5000" value="0"
           style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer;margin-top:8px"
-          oninput="document.getElementById('shared-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+';applySharedFilter()">
+          oninput="document.getElementById('shared-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+';applySharedFilterDebounced()">
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;margin-bottom:2px">
@@ -450,7 +450,7 @@
         </div>
         <input type="range" id="shared-dias-slider" min="0" max="90" step="1" value="0"
           style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer;margin-top:8px"
-          oninput="document.getElementById('shared-dias-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilter()">
+          oninput="document.getElementById('shared-dias-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilterDebounced()">
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;margin-bottom:2px">
@@ -458,7 +458,7 @@
         </div>
         <input type="range" id="shared-vsv-slider" min="0" max="10" step="1" value="0"
           style="width:100%;height:3px;accent-color:#eab308;cursor:pointer;margin-top:8px"
-          oninput="document.getElementById('shared-vsv-label').textContent=this.value==0?'Todos':this.value+'v';applySharedFilter()">
+          oninput="document.getElementById('shared-vsv-label').textContent=this.value==0?'Todos':this.value+'v';applySharedFilterDebounced()">
       </div>
     </div>
     </div>
@@ -782,6 +782,15 @@ function precomputeClientMetrics() {
     }
     c._visitasConsecSinVenta = consec;
     c._totalVisitas = visitas.length;
+    
+    // Días desde la última VENTA
+    const ultimaVenta = visitas.find(v => (v['Visita/Venta'] || '') === 'Venta');
+    if (ultimaVenta) {
+      const fechaVenta = parseDate(ultimaVenta['Fecha Visita']);
+      c._diasSinVenta = fechaVenta ? Math.round((new Date() - fechaVenta) / 86400000) : null;
+    } else {
+      c._diasSinVenta = null; // nunca ha comprado
+    }
   });
 }
 
@@ -1145,6 +1154,12 @@ function getFilteredClients(filters) {
   });
 }
 
+let _filterDebounceTimer = null;
+function applySharedFilterDebounced() {
+  clearTimeout(_filterDebounceTimer);
+  _filterDebounceTimer = setTimeout(applySharedFilter, 150);
+}
+
 function applySharedFilter() {
   const filters = getSharedFilters();
   const clients = getFilteredClients(filters);
@@ -1372,7 +1387,7 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
-            ${(c._visitasConsecSinVenta||0) > 0 ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta}v s/venta</span>` : ''}
+            ${(c._visitasConsecSinVenta||0) > 0 ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta}v · ${c._diasSinVenta !== null ? c._diasSinVenta+'d' : '—'} s/venta</span>` : (c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._diasSinVenta}d s/venta</span>` : '')}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
