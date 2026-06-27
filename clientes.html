@@ -1157,20 +1157,24 @@ function getFilteredClients(filters) {
 let _filterDebounceTimer = null;
 function applySharedFilterDebounced() {
   clearTimeout(_filterDebounceTimer);
-  _filterDebounceTimer = setTimeout(applySharedFilter, 150);
+  _filterDebounceTimer = setTimeout(applySharedFilter, 250);
 }
 
+let _renderVersion = 0;
 function applySharedFilter() {
+  const myVersion = ++_renderVersion;
   const filters = getSharedFilters();
   const clients = getFilteredClients(filters);
+  // Si ya hay un render más nuevo, descartar este
+  if (myVersion !== _renderVersion) return;
   renderSharedCalugas(clients);
+  if (myVersion !== _renderVersion) return;
   const activeView = document.querySelector('.view.active')?.id;
   if (activeView === 'view-map') {
     renderMapMarkersFromClients(clients);
   } else if (activeView === 'view-list') {
     renderListFromClients(clients);
   } else {
-    // Si no hay vista activa de mapa/lista, actualizar ambas en memoria
     renderMapMarkersFromClients(clients);
     renderListFromClients(clients);
   }
@@ -1387,7 +1391,7 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
-            ${(c._visitasConsecSinVenta||0) > 0 ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta}v · ${c._diasSinVenta !== null ? c._diasSinVenta+'d' : '—'} s/venta</span>` : (c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._diasSinVenta}d s/venta</span>` : '')}
+            ${c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta||0}v · ${c._diasSinVenta}d s/venta</span>` : ''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
