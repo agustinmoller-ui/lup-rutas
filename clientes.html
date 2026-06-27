@@ -31,7 +31,7 @@
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; overscroll-behavior: none; -webkit-overflow-scrolling: auto; }
 
   /* NAV */
   nav {
@@ -58,10 +58,10 @@
   }
 
   /* MAIN */
-  .main { flex: 1; overflow: hidden; position: relative; }
-  .view { display: none; height: 100%; }
+  .main { flex: 1; overflow: hidden; position: relative; min-height: 0; }
+  .view { display: none; position: absolute; inset: 0; }
   .view.active { display: flex; flex-direction: column; overflow: hidden; }
-  #view-map { position: relative; overflow: hidden; }
+  #view-map { position: absolute; inset: 0; overflow: hidden; }
 
   /* FILTER BAR */
   .filter-bar {
@@ -105,7 +105,11 @@
     top: 0; left: 0; right: 0; bottom: 0;
     width: 100% !important;
     height: 100% !important;
+    touch-action: none;
   }
+  /* Prevenir que Leaflet cause scroll del documento en móvil */
+  #view-map { touch-action: none; }
+  .leaflet-container { touch-action: none !important; }
   .leaflet-popup-content-wrapper {
     background: var(--surface) !important; border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important; box-shadow: var(--shadow) !important; padding: 0 !important;
@@ -1109,10 +1113,24 @@ function initFilters() {
 function initMap() {
   // Si el mapa ya existe, no volver a inicializarlo
   if (map) return;
-  map = L.map('map', { zoomControl: true }).setView([-33.45, -70.65], 11);
+  map = L.map('map', { 
+    zoomControl: true,
+    scrollWheelZoom: true,
+    dragging: true,
+    tap: false,
+    tapTolerance: 15,
+    bounceAtZoomLimits: false
+  }).setView([-33.45, -70.65], 11);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '©OpenStreetMap ©CartoDB', maxZoom: 19
   }).addTo(map);
+  
+  // Prevenir scroll del documento al interactuar con el mapa
+  const mapEl = document.getElementById('map');
+  if (mapEl) {
+    mapEl.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+    mapEl.addEventListener('touchmove', function(e) { e.stopPropagation(); }, { passive: true });
+  }
 }
 
 function makeMarkerIcon(status, size = 10) {
