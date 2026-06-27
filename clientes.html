@@ -411,57 +411,62 @@
 <!-- MAIN -->
 <div class="main">
 
-  <!-- ===== MAP VIEW ===== -->
-  <div class="view active" id="view-map" style="position:relative;">
-    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()"
-        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-        <select id="map-comuna" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Comunas</option></select>
-        <select id="map-status" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none">
-          <option value="">Estado</option>
-          <option value="ok">🔵 OK</option>
-          <option value="green">🟢 Verde</option>
-          <option value="yellow">🟡 Amarillo</option>
-          <option value="red">🔴 Rojo</option>
-          <option value="critical">⚫ Crítico</option>
-        </select>
-        <select id="map-vendedor" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
+  <!-- ===== FILTRO COMPARTIDO (Mapa + Lista) ===== -->
+  <div id="shared-filter" style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+    <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
+      style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+      <select id="shared-comuna" onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Comunas</option></select>
+      <select id="shared-status" onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none">
+        <option value="">Estado</option>
+        <option value="ok">🔵 OK</option>
+        <option value="green">🟢 Verde</option>
+        <option value="yellow">🟡 Amarillo</option>
+        <option value="red">🔴 Rojo</option>
+        <option value="critical">⚫ Crítico</option>
+      </select>
+      <select id="shared-vendedor" onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+          <span>💵 Ticket</span><span id="shared-ticket-label" style="font-weight:700;color:var(--text)">Todos</span>
+        </div>
+        <input type="range" id="shared-ticket-slider" min="0" max="200000" step="5000" value="0"
+          style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
+          oninput="document.getElementById('shared-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+';applySharedFilter()">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>💵 Ticket</span><span id="map-ticket-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="map-ticket-slider" min="0" max="200000" step="5000" value="0"
-            style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
-            oninput="document.getElementById('map-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+'" onchange="filterMap()">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+          <span>📅 Sin visita</span><span id="shared-dias-label" style="font-weight:700;color:var(--text)">Todos</span>
         </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>📅 Sin visita</span><span id="map-dias-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="map-dias-slider" min="0" max="90" step="1" value="0"
-            style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
-            oninput="document.getElementById('map-dias-label').textContent=this.value==0?'Todos':this.value+'d+'" onchange="filterMap()">
+        <input type="range" id="shared-dias-slider" min="0" max="90" step="1" value="0"
+          style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
+          oninput="document.getElementById('shared-dias-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilter()">
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+          <span>🚫 Sin venta</span><span id="shared-vsv-label" style="font-weight:700;color:var(--text)">Todos</span>
         </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>🚫 Sin venta</span><span id="map-vsv-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="map-vsv-slider" min="0" max="10" step="1" value="0"
-            style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
-            oninput="document.getElementById('map-vsv-label').textContent=this.value==0?'Todos':this.value+'v'" onchange="filterMap()">
-        </div>
+        <input type="range" id="shared-vsv-slider" min="0" max="10" step="1" value="0"
+          style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
+          oninput="document.getElementById('shared-vsv-label').textContent=this.value==0?'Todos':this.value+'v';applySharedFilter()">
       </div>
     </div>
+  </div>
+  <!-- Calugas compartidas delgadas -->
+  <div id="shared-calugas" style="display:flex;gap:5px;padding:5px 8px;overflow-x:auto;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
+
+  <!-- ===== MAP VIEW ===== -->
+  <!-- ===== MAP VIEW ===== -->
+  <div class="view active" id="view-map" style="position:relative;">
     <div id="map"></div>
     <div class="map-legend">
       <div class="legend-title">Días faltantes</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div>OK ≥5 días</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div>OK ≥5</div>
       <div class="legend-row"><div class="legend-dot" style="background:#22c55e"></div>Verde 0–4</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#eab308"></div>Amarillo -1 a -5</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Rojo -6 a -10</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#eab308"></div>Amar. -1/-5</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Rojo -6/-10</div>
       <div class="legend-row"><div class="legend-dot" style="background:#7f1d1d"></div>Crítico &lt;-10</div>
       <div class="legend-row"><div class="legend-dot" style="background:#64748b"></div>Sin datos</div>
     </div>
@@ -470,54 +475,7 @@
 
   <!-- ===== LIST VIEW ===== -->
   <div class="view" id="view-list">
-    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-      <!-- Fila 1: búsqueda -->
-      <input type="text" id="list-search" placeholder="🔍 Buscar cliente..." oninput="renderList()"
-        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      <!-- Fila 2: 3 selects en grilla -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-        <select id="list-comuna" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Comunas</option></select>
-        <select id="list-status" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none">
-          <option value="">Estado</option>
-          <option value="ok">🔵 OK</option>
-          <option value="green">🟢 Verde</option>
-          <option value="yellow">🟡 Amarillo</option>
-          <option value="red">🔴 Rojo</option>
-          <option value="critical">⚫ Crítico</option>
-        </select>
-        <select id="list-vendedor" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
-      </div>
-      <!-- Fila 3: 3 sliders compactos en grilla -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>💵 Ticket</span><span id="ticket-slider-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="list-ticket-slider" min="0" max="200000" step="5000" value="0"
-            style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
-            oninput="updateTicketSlider(this.value)" onchange="renderList()">
-        </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>📅 Sin visita</span><span id="list-dias-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="list-dias-slider" min="0" max="90" step="1" value="0"
-            style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
-            oninput="document.getElementById('list-dias-label').textContent=this.value==0?'Todos':this.value+'d+'" onchange="renderList()">
-        </div>
-        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
-            <span>🚫 Sin venta</span><span id="list-vsv-label" style="font-weight:700;color:var(--text)">Todos</span>
-          </div>
-          <input type="range" id="list-vsv-slider" min="0" max="10" step="1" value="0"
-            style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
-            oninput="document.getElementById('list-vsv-label').textContent=this.value==0?'Todos':this.value+'v'" onchange="renderList()">
-        </div>
-      </div>
-    </div>
-    <div class="calugas-row" id="list-calugas"></div>
     <div class="list-view-inner">
-      <!-- Tarjetas para móvil (se muestra con CSS en <700px) -->
       <div id="list-cards"></div>
       <div class="table-wrap">
         <table id="main-table">
@@ -771,10 +729,10 @@ async function loadData(force = false) {
     // Ajustar max del slider al ticket máximo real del dataset
     const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
     const maxSlider = Math.ceil(maxTick / 10000) * 10000;
-    const sliderEl = document.getElementById('list-ticket-slider');
-    if (sliderEl && maxTick > 0) sliderEl.max = maxSlider;
-    const mapSliderEl = document.getElementById('map-ticket-slider');
-    if (mapSliderEl && maxTick > 0) mapSliderEl.max = maxSlider;
+    ['list-ticket-slider','map-ticket-slider','shared-ticket-slider'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && maxTick > 0) el.max = maxSlider;
+    });
     renderList();
     renderDashboard();
     renderAdmin();
@@ -1000,7 +958,7 @@ function initFilters() {
   const comunas = [...new Set(clients.map(c => c.comuna).filter(Boolean))].sort();
   const vendedores = [...new Set(clients.map(c => c.vendedor).filter(Boolean))].sort();
   
-  ['map-comuna','list-comuna','dash-comuna'].forEach(id => {
+  ['map-comuna','list-comuna','dash-comuna','shared-comuna'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     comunas.forEach(c => { const o = new Option(c,c); sel.add(o); });
@@ -1037,111 +995,108 @@ function makeMarkerIcon(status, size = 10) {
 
 function toggleTodos(el) {
   mostrarTodos = !el.checked;
-  filterMap();
+  applySharedFilter();
 }
+
+// ============================================================
+// FILTRO COMPARTIDO — mapa y lista usan los mismos criterios
+// ============================================================
+function getSharedFilters() {
+  return {
+    search:    (document.getElementById('shared-search')?.value || '').toLowerCase(),
+    comuna:    document.getElementById('shared-comuna')?.value || '',
+    status:    document.getElementById('shared-status')?.value || '',
+    vendedor:  document.getElementById('shared-vendedor')?.value || '',
+    minTicket: parseInt(document.getElementById('shared-ticket-slider')?.value) || 0,
+    minDias:   parseInt(document.getElementById('shared-dias-slider')?.value) || 0,
+    minVSV:    parseInt(document.getElementById('shared-vsv-slider')?.value) || 0,
+  };
+}
+
+function getFilteredClients(filters) {
+  const f = filters || getSharedFilters();
+  // Pre-calc sin-venta set si hace falta
+  let sinVentaSet = null;
+  if (f.minVSV > 0 && visitasData) {
+    sinVentaSet = new Set();
+    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
+      const vis = visitasData
+        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
+        .sort((a,b) => (parseDate(b['Fecha Visita'])||0) - (parseDate(a['Fecha Visita'])||0))
+        .slice(0, f.minVSV);
+      if (vis.length >= f.minVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
+        sinVentaSet.add(c.codigo);
+      }
+    });
+  }
+  return Object.values(allClientsMap).filter(c => {
+    if (!c.enSeguimiento) return false;
+    if (f.search && !c.nombre.toLowerCase().includes(f.search) && !c.codigo.toLowerCase().includes(f.search)) return false;
+    if (f.comuna && c.comuna !== f.comuna) return false;
+    if (f.vendedor && c.vendedor !== f.vendedor) return false;
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    if (f.status && st !== f.status) return false;
+    if (f.minTicket > 0 && (c.ticketPromedio||0) < f.minTicket) return false;
+    if (f.minDias > 0 && (parseFloat(c.diasSinContacto)||0) < f.minDias) return false;
+    if (sinVentaSet !== null && !sinVentaSet.has(c.codigo)) return false;
+    return true;
+  });
+}
+
+function applySharedFilter() {
+  const filters = getSharedFilters();
+  const clients = getFilteredClients(filters);
+  renderSharedCalugas(clients);
+  const activeView = document.querySelector('.view.active')?.id;
+  if (activeView === 'view-map') {
+    renderMapMarkersFromClients(clients);
+  } else if (activeView === 'view-list') {
+    renderListFromClients(clients);
+  } else {
+    // Si no hay vista activa de mapa/lista, actualizar ambas en memoria
+    renderMapMarkersFromClients(clients);
+    renderListFromClients(clients);
+  }
+}
+
+function renderSharedCalugas(clients) {
+  // Delegado — las calugas se renderizan dentro de renderListFromClients
+  // que es llamado por applySharedFilter
+}
+
 
 function filterMap() {
   renderMapMarkers();
 }
 
-function renderMapMarkers() {
+function renderMapMarkersFromClients(clients) {
   if (!map) return;
   markers.forEach(m => map.removeLayer(m));
   markers = [];
-  
-  const search = document.getElementById('map-search').value.toLowerCase();
-  const comuna = document.getElementById('map-comuna').value;
-  const status = document.getElementById('map-status').value;
-  const vendedor = document.getElementById('map-vendedor').value;
-  const soloSeg = true; // solo seguimiento
-  
-  const mapMinTicket = parseInt(document.getElementById('map-ticket-slider')?.value) || 0;
-  const mapMinDias   = parseInt(document.getElementById('map-dias-slider')?.value) || 0;
-  const mapMinVSV    = parseInt(document.getElementById('map-vsv-slider')?.value) || 0;
 
-  // Pre-calcular set sin venta si slider activo
-  let mapSinVentaSet = null;
-  if (mapMinVSV > 0) {
-    mapSinVentaSet = new Set();
-    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
-      const vis = (visitasData || [])
-        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
-        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))
-        .slice(0, mapMinVSV);
-      if (vis.length >= mapMinVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
-        mapSinVentaSet.add(c.codigo);
-      }
-    });
-  }
+  const clientsWithCoords = clients.filter(c => c.lat && c.lng);
 
-  const clients = Object.values(allClientsMap).filter(c => {
-    if (!c.lat || !c.lng) return false;
-    if (!c.enSeguimiento) return false;
-    if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
-    if (comuna && c.comuna !== comuna) return false;
-    if (vendedor && c.vendedor !== vendedor) return false;
-    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
-    if (status && st !== status) return false;
-    if (mapMinTicket > 0 && (c.ticketPromedio||0) < mapMinTicket) return false;
-    if (mapMinDias > 0 && (parseFloat(c.diasSinContacto)||0) < mapMinDias) return false;
-    if (mapSinVentaSet !== null && !mapSinVentaSet.has(c.codigo)) return false;
-    return true;
-  });
-  
-  // Stats
-  const counts = { ok:0, green:0, yellow:0, red:0, critical:0, nodata:0 };
-  clients.forEach(c => {
-    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
-    counts[st] = (counts[st] || 0) + 1;
-  });
-  
   const statsEl = document.getElementById('map-stats');
-  statsEl.innerHTML = `
-    <div class="map-stat-card"><div class="num">${clients.length}</div><div class="lbl">Clientes visibles</div></div>
-    <div class="map-stat-card"><div class="num" style="color:#ef4444">${counts.red + counts.critical}</div><div class="lbl">Atrasados</div></div>
-  `;
-  
-  clients.forEach(c => {
+  const counts = { ok:0, green:0, yellow:0, red:0, critical:0, nodata:0 };
+  clientsWithCoords.forEach(c => { const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento); counts[st] = (counts[st]||0)+1; });
+  if (statsEl) statsEl.innerHTML = `<div class="map-stat-card"><div class="num">${clientsWithCoords.length}</div><div class="lbl">Clientes</div></div><div class="map-stat-card"><div class="num" style="color:#ef4444">${counts.red+counts.critical}</div><div class="lbl">Atrasados</div></div>`;
+
+  clientsWithCoords.forEach(c => {
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
-    const size = c.enSeguimiento ? 12 : 8;
-    const marker = L.marker([c.lat, c.lng], { icon: makeMarkerIcon(st, size) });
-    
+    const marker = L.marker([c.lat, c.lng], { icon: makeMarkerIcon(st, 12) });
     const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes} días` : '—';
     const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
-    
-    marker.bindPopup(`
-      <div class="popup-inner">
-        <div class="popup-name">${c.nombre}</div>
-        <div class="popup-addr">${c.direccion || c.comuna}</div>
-        <div class="popup-grid">
-          <div class="popup-stat">
-            <div class="popup-stat-label">Última visita</div>
-            <div class="popup-stat-val">${c.ultimaVisita || '—'}</div>
-          </div>
-          <div class="popup-stat">
-            <div class="popup-stat-label">Días faltantes</div>
-            <div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div>
-          </div>
-          <div class="popup-stat">
-            <div class="popup-stat-label">Ticket prom.</div>
-            <div class="popup-stat-val">${ticketStr}</div>
-          </div>
-          <div class="popup-stat">
-            <div class="popup-stat-label">Frecuencia</div>
-            <div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + ' días' : '—'}</div>
-          </div>
-        </div>
-        <div class="popup-actions">
-          ${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}
-          <button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button>
-        </div>
-      </div>
-    `, { maxWidth: 280 });
-    
+    marker.bindPopup(`<div class="popup-inner"><div class="popup-name">${c.nombre}</div><div class="popup-addr">${c.direccion || c.comuna}</div><div class="popup-grid"><div class="popup-stat"><div class="popup-stat-label">Última visita</div><div class="popup-stat-val">${c.ultimaVisita || '—'}</div></div><div class="popup-stat"><div class="popup-stat-label">Días falt.</div><div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Ticket</div><div class="popup-stat-val">${ticketStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Frecuencia</div><div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div></div></div><div class="popup-actions">${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}<button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button></div></div>`, { maxWidth: 280 });
     marker.addTo(map);
     markers.push(marker);
   });
 }
+
+function renderMapMarkers() {
+  // Wrapper legacy para compatibilidad — usa filtro compartido
+  applySharedFilter();
+}
+function filterMap() { applySharedFilter(); }
 
 // ============================================================
 // LIST
@@ -1207,8 +1162,7 @@ function sortList(col) {
   renderList();
 }
 
-function renderList() {
-  let clients = getFilteredClients('list');
+function renderListFromClients(clients) {
   
   // Sort: siempre primero por criticidad (más atrasado primero), luego por ticket DESC como desempate
   const STATUS_PRIORITY = { critical: 0, red: 1, yellow: 2, nodata: 3, green: 4, ok: 5, noseg: 6 };
@@ -1271,44 +1225,32 @@ function renderList() {
     });
   }
 
-  const calugas = document.getElementById('list-calugas');
-  calugas.innerHTML = `
-    <div class="caluga ok" title="En frecuencia, margen positivo"><div class="caluga-num" style="color:#3b82f6">${counts.ok}</div><div class="caluga-label">🔵 OK</div></div>
-    <div class="caluga green" title="0-4 días de margen"><div class="caluga-num" style="color:#22c55e">${counts.green}</div><div class="caluga-label">🟢 Verde</div></div>
-    <div class="caluga yellow" title="-1 a -5 días de atraso"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
-    <div class="caluga red" title="-6 a -10 días de atraso"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
-    <div class="caluga critical" title="Más de 10 días de atraso"><div class="caluga-num" style="color:#dc2626">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
-    <div class="caluga" style="min-width:90px"><div class="caluga-num" style="color:#64748b">${counts.nodata}</div><div class="caluga-label">⚪ Sin visita</div></div>
-    <div class="caluga" style="border-left:3px solid #eab308;min-width:110px">
-      <div class="caluga-num" style="color:#eab308">${totalFueraFrecuencia}</div>
-      <div class="caluga-label">⏰ Fuera frec.</div>
-      <div class="caluga-sub">${pctAlerta}% del total</div>
-    </div>
-    <div class="caluga" style="border-left:3px solid #64748b;min-width:110px">
-      <div class="caluga-num" style="color:var(--text);font-size:20px">${promDiasSin}d</div>
-      <div class="caluga-label">📅 Días sin visita</div>
-      <div class="caluga-sub">promedio</div>
-    </div>
-    <div class="caluga" style="border-left:3px solid #3b82f6;min-width:140px">
-      <div class="caluga-num" style="color:#3b82f6;font-size:16px">$${promTicket.toLocaleString('es-CL')}</div>
-      <div class="caluga-label">💰 Ticket prom.</div>
-      <div class="caluga-sub">${clientsConTicket.length} con compras</div>
-    </div>
-    <div class="caluga" style="border-left:3px solid #ef4444;min-width:160px">
-      <div class="caluga-label">💸 Ventas est. perdidas</div>
-      <div class="caluga-lost" style="color:#ef4444;font-size:18px;font-weight:700;margin-top:4px">$${Math.round(ventasPerdidas).toLocaleString('es-CL')}</div>
-      <div class="caluga-sub">${totalFueraFrecuencia} clientes atrasados</div>
-    </div>
-    <div class="caluga" style="border-left:3px solid #eab308;min-width:120px">
-      <div class="caluga-num" style="color:#eab308;font-size:22px">${visitasSinVenta}</div>
-      <div class="caluga-label">🚫 Últ. visita sin venta</div>
-      <div class="caluga-sub">${clients.length ? Math.round(visitasSinVenta/clients.length*100) : 0}% del total</div>
-    </div>
-    <div class="caluga" style="min-width:80px;border-left:2px solid var(--border)">
-      <div class="caluga-num" style="color:var(--text);font-size:18px">${clients.length}</div>
-      <div class="caluga-label">📊 Total filtrado</div>
-    </div>
-  `;
+  const calugas = document.getElementById('shared-calugas');
+  // Chips compactos: número grande + label mini en una sola línea
+  const chip = (num, label, color, bg='transparent', bold=false) =>
+    `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 8px;border-radius:8px;background:${bg};border:1px solid ${color}20;min-width:44px;flex-shrink:0;cursor:default">
+      <span style="font-size:17px;font-weight:700;color:${color};line-height:1">${num}</span>
+      <span style="font-size:9px;color:${color};opacity:0.8;white-space:nowrap;margin-top:1px">${label}</span>
+    </div>`;
+  const chipWide = (top, bottom, color) =>
+    `<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:3px 8px;border-radius:8px;background:${color}10;border:1px solid ${color}30;min-width:80px;flex-shrink:0">
+      <span style="font-size:13px;font-weight:700;color:${color};line-height:1.2">${top}</span>
+      <span style="font-size:9px;color:var(--text2);white-space:nowrap">${bottom}</span>
+    </div>`;
+  calugas.innerHTML =
+    chip(counts.ok,'OK','#3b82f6') +
+    chip(counts.green,'Verde','#22c55e') +
+    chip(counts.yellow,'Amar.','#eab308') +
+    chip(counts.red,'Rojo','#ef4444') +
+    chip(counts.critical,'Crítico','#dc2626') +
+    chip(counts.nodata,'Sin vis.','#64748b') +
+    '<div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:2px 3px"></div>' +
+    chipWide('⏰ '+totalFueraFrecuencia+' ('+pctAlerta+'%)', 'fuera frecuencia', '#eab308') +
+    chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
+    chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
+    chipWide('🚫 '+visitasSinVenta, 'últ. visita sin venta', '#ef4444') +
+    chipWide('💸 $'+Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K', 'ventas perdidas est.', '#dc2626') +
+    chip(clients.length,'Total','#94a3b8');
   
   // Table
   const tbody = document.getElementById('list-body');
@@ -1382,6 +1324,10 @@ function renderList() {
 // ============================================================
 // HISTORIAL MODAL
 // ============================================================
+function renderList() {
+  applySharedFilter();
+}
+
 function openHistorial(codigo) {
   const c = allClientsMap[codigo];
   if (!c) return;
@@ -1898,8 +1844,19 @@ function showView(name) {
   document.getElementById(`view-${name}`).classList.add('active');
   event.target.classList.add('active');
   
+  // Filtro compartido: visible solo en mapa y lista
+  const sf = document.getElementById('shared-filter');
+  const sc = document.getElementById('shared-calugas');
+  const showShared = (name === 'map' || name === 'list');
+  if (sf) sf.style.display = showShared ? 'flex' : 'none';
+  if (sc) sc.style.display = showShared ? 'flex' : 'none';
+
   if (name === 'map') {
     setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+    applySharedFilter(); // sync mapa con filtro actual
+  }
+  if (name === 'list') {
+    applySharedFilter(); // sync lista con filtro actual
   }
 }
 
