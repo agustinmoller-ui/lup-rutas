@@ -400,13 +400,14 @@
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="showView('map',event)">🗺️ Mapa</button>
     <button class="tab-btn" onclick="showView('list',event)">🔔 Lista</button>
-    <button class="tab-btn" onclick="showView('dashboard',event)">📊 Ventas</button>
-    <button class="tab-btn admin-only" onclick="showView('admin',event)">🔐 Admin</button>
   </div>
-  <div class="nav-right" style="display:flex;align-items:center;gap:8px">
+  <div class="nav-right" style="display:flex;align-items:center;gap:6px">
+    <button onclick="showView('dashboard',event)" id="tab-dashboard"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit;white-space:nowrap">📊 Ventas</button>
+    <button onclick="showView('admin',event)" id="tab-admin" class="admin-only"
+      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit">🔐</button>
     <span id="last-update" style="font-size:10px;color:var(--text2);display:none"></span>
     <button onclick="refreshData()" id="refresh-btn" title="Actualizar datos" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:14px;color:var(--text2)">⟳</button>
-    <div class="role-badge" id="role-badge">Admin</div>
   </div>
 </nav>
 
@@ -1945,8 +1946,16 @@ function rejectDelete(codigo) {
 function showView(name, evt) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  // También desactivar botones del nav-right (dashboard, admin)
+  ['tab-dashboard','tab-admin'].forEach(id => { const el = document.getElementById(id); if (el) el.style.background = 'var(--surface2)'; });
   document.getElementById(`view-${name}`).classList.add('active');
-  if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+  if (evt && evt.currentTarget) {
+    evt.currentTarget.classList.add('active');
+    // Si es dashboard o admin, resaltar el botón del nav-right
+    if (name === 'dashboard' || name === 'admin') {
+      evt.currentTarget.style.background = 'var(--ac)';
+    }
+  }
   
   // Filtro compartido: visible solo en mapa y lista
   const sf = document.getElementById('shared-filter');
