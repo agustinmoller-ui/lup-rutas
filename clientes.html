@@ -501,13 +501,24 @@
 
   <!-- ===== ALERTS VIEW ===== -->
   <div class="view" id="view-alerts">
-    <div class="filter-bar">
-      <div class="config-label">Alertar si sin visita más de</div>
-      <input type="number" class="config-input" id="alert-dias" value="30" min="1" onchange="renderAlerts()">
-      <div class="config-label">días</div>
-      <div class="config-label" style="margin-left:16px">Sin venta en últimas</div>
-      <input type="number" class="config-input" id="alert-visitas-sin-venta" value="3" min="1" onchange="renderAlerts()">
-      <div class="config-label">visitas</div>
+    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:2;min-width:200px">
+        <div class="config-label">Sin visita &gt;</div>
+        <input type="number" class="config-input" id="alert-dias" value="30" min="1" onchange="renderAlerts()">
+        <div class="config-label">días</div>
+        <div class="config-label" style="margin-left:8px">Sin venta en</div>
+        <input type="number" class="config-input" id="alert-visitas-sin-venta" value="3" min="1" onchange="renderAlerts()">
+        <div class="config-label">visitas</div>
+      </div>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
+          <span id="alert-ticket-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
+        </div>
+        <input type="range" id="alert-ticket-slider" min="0" max="200000" step="5000" value="0"
+          style="width:100%;accent-color:#3b82f6;cursor:pointer"
+          oninput="updateAlertTicketSlider(this.value)" onchange="renderAlerts()">
+      </div>
     </div>
     <div style="flex:1;overflow-y:auto;padding:16px;" id="alerts-body"></div>
   </div>
@@ -744,10 +755,11 @@ async function loadData(force = false) {
     renderMapMarkers();
     // Ajustar max del slider al ticket máximo real del dataset
     const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
+    const maxSlider = Math.ceil(maxTick / 10000) * 10000;
     const sliderEl = document.getElementById('list-ticket-slider');
-    if (sliderEl && maxTick > 0) {
-      sliderEl.max = Math.ceil(maxTick / 10000) * 10000;
-    }
+    if (sliderEl && maxTick > 0) sliderEl.max = maxSlider;
+    const alertSliderEl = document.getElementById('alert-ticket-slider');
+    if (alertSliderEl && maxTick > 0) alertSliderEl.max = maxSlider;
     renderList();
     renderAlerts();
     renderDashboard();
@@ -1088,6 +1100,12 @@ function renderMapMarkers() {
 // ============================================================
 // LIST
 // ============================================================
+function updateAlertTicketSlider(val) {
+  const v = parseInt(val);
+  const label = document.getElementById('alert-ticket-label');
+  if (label) label.textContent = v === 0 ? '$ Todos' : '$' + v.toLocaleString('es-CL') + '+';
+}
+
 function updateTicketSlider(val) {
   const v = parseInt(val);
   const label = document.getElementById('ticket-slider-label');
@@ -1334,7 +1352,12 @@ function closeModal(e) {
 function renderAlerts() {
   const diasThreshold = parseInt(document.getElementById('alert-dias').value) || 30;
 
-  const clients = Object.values(allClientsMap).filter(c => c.enSeguimiento);
+  const alertMinTicket = parseInt(document.getElementById('alert-ticket-slider')?.value) || 0;
+  const clients = Object.values(allClientsMap).filter(c => {
+    if (!c.enSeguimiento) return false;
+    if (alertMinTicket > 0 && (c.ticketPromedio || 0) < alertMinTicket) return false;
+    return true;
+  });
 
   function rowTabla(c, tag) {
     const diasF = parseFloat(c.diasFaltantes);
