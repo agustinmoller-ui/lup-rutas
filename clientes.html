@@ -1060,9 +1060,63 @@ function applySharedFilter() {
 }
 
 function renderSharedCalugas(clients) {
-  // Delegado — las calugas se renderizan dentro de renderListFromClients
-  // que es llamado por applySharedFilter
+  renderCalugas(clients);
 }
+function renderCalugas(clients) {
+  const counts = { ok:0, green:0, yellow:0, red:0, critical:0, nodata:0 };
+  clients.forEach(c => { const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento); counts[st] = (counts[st]||0)+1; });
+  const totalFueraFrecuencia = counts.yellow + counts.red + counts.critical;
+
+  const clientsConDias = clients.filter(c => parseFloat(c.diasSinContacto) > 0);
+  const promDiasSin = clientsConDias.length
+    ? Math.round(clientsConDias.reduce((s,c) => s + parseFloat(c.diasSinContacto), 0) / clientsConDias.length)
+    : 0;
+  const clientsConTicket = clients.filter(c => c.ticketPromedio > 0);
+  const promTicket = clientsConTicket.length
+    ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
+    : 0;
+  const pctAlerta = clients.length ? Math.round(((counts.yellow+counts.red+counts.critical)/clients.length)*100) : 0;
+  // Visitas sin venta: contar clientes donde la última visita NO fue venta
+  let visitasSinVenta = 0;
+  if (visitasData && visitasData.length) {
+    clients.forEach(c => {
+      const ultVis = (visitasData)
+        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
+        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))[0];
+      if (ultVis && (ultVis['Visita/Venta']||'') !== 'Venta') visitasSinVenta++;
+    });
+  }
+
+  const calugas = document.getElementById('shared-calugas');
+  // Chips compactos: número grande + label mini en una sola línea
+  const chip = (num, label, color, bg='transparent', bold=false) =>
+    `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 8px;border-radius:8px;background:${bg};border:1px solid ${color}20;min-width:44px;flex-shrink:0;cursor:default">
+      <span style="font-size:17px;font-weight:700;color:${color};line-height:1">${num}</span>
+      <span style="font-size:9px;color:${color};opacity:0.8;white-space:nowrap;margin-top:1px">${label}</span>
+    </div>`;
+  const chipWide = (top, bottom, color) =>
+    `<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:3px 8px;border-radius:8px;background:${color}10;border:1px solid ${color}30;min-width:80px;flex-shrink:0">
+      <span style="font-size:13px;font-weight:700;color:${color};line-height:1.2">${top}</span>
+      <span style="font-size:9px;color:var(--text2);white-space:nowrap">${bottom}</span>
+    </div>`;
+  calugas.innerHTML =
+    chip(counts.ok,'OK','#3b82f6') +
+    chip(counts.green,'Verde','#22c55e') +
+    chip(counts.yellow,'Amar.','#eab308') +
+    chip(counts.red,'Rojo','#ef4444') +
+    chip(counts.critical,'Crítico','#dc2626') +
+    chip(counts.nodata,'Sin vis.','#64748b') +
+    '<div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:2px 3px"></div>' +
+    chipWide('⏰ '+totalFueraFrecuencia+' ('+pctAlerta+'%)', 'fuera frecuencia', '#eab308') +
+    chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
+    chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
+    chipWide('🚫 '+visitasSinVenta, 'últ. visita sin venta', '#ef4444') +
+    chipWide('💸 $'+Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K', 'ventas perdidas est.', '#dc2626') +
+    chip(clients.length,'Total','#94a3b8');
+  
+}
+
+
 
 
 function filterMap() {
@@ -1109,50 +1163,9 @@ function updateAlertTicketSlider(val) {
 
 function updateTicketSlider(val) {
   const v = parseInt(val);
-  const label = document.getElementById('ticket-slider-label');
-  if (label) label.textContent = v === 0 ? '$ Todos' : '$' + v.toLocaleString('es-CL') + '+';
-}
-
-function getFilteredClients(prefix = 'list') {
-  const search   = document.getElementById(`${prefix}-search`)?.value.toLowerCase() || '';
-  const comuna   = document.getElementById(`${prefix}-comuna`)?.value || '';
-  const status   = document.getElementById(`${prefix}-status`)?.value || '';
-  const vendedor = document.getElementById(`${prefix}-vendedor`)?.value || '';
-
-  // Sliders
-  const minTicket = parseInt(document.getElementById('list-ticket-slider')?.value) || 0;
-  const minDias   = parseInt(document.getElementById('list-dias-slider')?.value) || 0;
-  const minVSV    = parseInt(document.getElementById('list-vsv-slider')?.value) || 0;
-
-  // Pre-calcular set sin venta si slider activo
-  let sinVentaSet = null;
-  if (minVSV > 0) {
-    sinVentaSet = new Set();
-    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
-      const vis = (visitasData || [])
-        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
-        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))
-        .slice(0, minVSV);
-      if (vis.length >= minVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
-        sinVentaSet.add(c.codigo);
-      }
-    });
-  }
-
-  return Object.values(allClientsMap).filter(c => {
-    if (!c.enSeguimiento) return false;
-    if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
-    if (comuna && c.comuna !== comuna) return false;
-    if (vendedor && c.vendedor !== vendedor) return false;
-    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
-    if (status && st !== status) return false;
-    // Slider ticket
-    if (minTicket > 0 && (c.ticketPromedio || 0) < minTicket) return false;
-    // Slider sin visita: días sin contacto >= umbral
-    if (minDias > 0 && (parseFloat(c.diasSinContacto) || 0) < minDias) return false;
-    // Slider sin venta: debe estar en el set calculado
-    if (sinVentaSet !== null && !sinVentaSet.has(c.codigo)) return false;
-    return true;
+  ['ticket-slider-label','shared-ticket-label'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v === 0 ? 'Todos' : '$' + v.toLocaleString('es-CL') + '+';
   });
 }
 
@@ -1204,54 +1217,8 @@ function renderListFromClients(clients) {
   // Ventas est. perdidas = suma de tickets de clientes fuera de frecuencia
   // Representa lo que habrían comprado si hubieran sido visitados a tiempo
   const ventasPerdidas = ticketSumFuera;
-  // Métricas adicionales para calugas
-  const clientsConDias = clients.filter(c => parseFloat(c.diasSinContacto) > 0);
-  const promDiasSin = clientsConDias.length
-    ? Math.round(clientsConDias.reduce((s,c) => s + parseFloat(c.diasSinContacto), 0) / clientsConDias.length)
-    : 0;
-  const clientsConTicket = clients.filter(c => c.ticketPromedio > 0);
-  const promTicket = clientsConTicket.length
-    ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
-    : 0;
-  const pctAlerta = clients.length ? Math.round(((counts.yellow+counts.red+counts.critical)/clients.length)*100) : 0;
-  // Visitas sin venta: contar clientes donde la última visita NO fue venta
-  let visitasSinVenta = 0;
-  if (visitasData && visitasData.length) {
-    clients.forEach(c => {
-      const ultVis = (visitasData)
-        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
-        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))[0];
-      if (ultVis && (ultVis['Visita/Venta']||'') !== 'Venta') visitasSinVenta++;
-    });
-  }
+  renderCalugas(clients);
 
-  const calugas = document.getElementById('shared-calugas');
-  // Chips compactos: número grande + label mini en una sola línea
-  const chip = (num, label, color, bg='transparent', bold=false) =>
-    `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 8px;border-radius:8px;background:${bg};border:1px solid ${color}20;min-width:44px;flex-shrink:0;cursor:default">
-      <span style="font-size:17px;font-weight:700;color:${color};line-height:1">${num}</span>
-      <span style="font-size:9px;color:${color};opacity:0.8;white-space:nowrap;margin-top:1px">${label}</span>
-    </div>`;
-  const chipWide = (top, bottom, color) =>
-    `<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:3px 8px;border-radius:8px;background:${color}10;border:1px solid ${color}30;min-width:80px;flex-shrink:0">
-      <span style="font-size:13px;font-weight:700;color:${color};line-height:1.2">${top}</span>
-      <span style="font-size:9px;color:var(--text2);white-space:nowrap">${bottom}</span>
-    </div>`;
-  calugas.innerHTML =
-    chip(counts.ok,'OK','#3b82f6') +
-    chip(counts.green,'Verde','#22c55e') +
-    chip(counts.yellow,'Amar.','#eab308') +
-    chip(counts.red,'Rojo','#ef4444') +
-    chip(counts.critical,'Crítico','#dc2626') +
-    chip(counts.nodata,'Sin vis.','#64748b') +
-    '<div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:2px 3px"></div>' +
-    chipWide('⏰ '+totalFueraFrecuencia+' ('+pctAlerta+'%)', 'fuera frecuencia', '#eab308') +
-    chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
-    chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
-    chipWide('🚫 '+visitasSinVenta, 'últ. visita sin venta', '#ef4444') +
-    chipWide('💸 $'+Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K', 'ventas perdidas est.', '#dc2626') +
-    chip(clients.length,'Total','#94a3b8');
-  
   // Table
   const tbody = document.getElementById('list-body');
   if (!clients.length) {
