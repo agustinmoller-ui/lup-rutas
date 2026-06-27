@@ -60,7 +60,8 @@
   /* MAIN */
   .main { flex: 1; overflow: hidden; position: relative; }
   .view { display: none; height: 100%; }
-  .view.active { display: flex; flex-direction: column; }
+  .view.active { display: flex; flex-direction: column; overflow: hidden; }
+  #view-map { position: relative; overflow: hidden; }
 
   /* FILTER BAR */
   .filter-bar {
@@ -99,7 +100,12 @@
   input:checked + .slider:before { transform: translateX(18px); background: white; }
 
   /* MAP */
-  #map { flex: 1; }
+  #map { 
+    position: absolute !important; 
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
   .leaflet-popup-content-wrapper {
     background: var(--surface) !important; border: 1px solid var(--border) !important;
     border-radius: var(--radius) !important; box-shadow: var(--shadow) !important; padding: 0 !important;
@@ -418,7 +424,7 @@
   <!-- Panel de filtros fijo (sin toggle para evitar colapso accidental) -->
   <div style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
     <div id="filter-toggle-bar" style="display:none"></div>
-    <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px">
+    <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
       style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
@@ -467,8 +473,8 @@
 
   <!-- ===== MAP VIEW ===== -->
   <!-- ===== MAP VIEW ===== -->
-  <div class="view active" id="view-map" style="position:relative;">
-    <div id="map" style="width:100%;height:100%;"></div>
+  <div class="view active" id="view-map" style="position:relative;flex:1;overflow:hidden;min-height:0;">
+    <div id="map" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;"></div>
     <!-- Botón flotante leyenda -->
     <button onclick="document.getElementById('legend-modal').style.display='flex'"
       style="position:fixed;bottom:16px;right:10px;z-index:1000;
