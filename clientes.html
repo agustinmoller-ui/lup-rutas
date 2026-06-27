@@ -463,11 +463,12 @@
     <div id="map"></div>
     <!-- Botón flotante leyenda -->
     <button onclick="document.getElementById('legend-modal').style.display='flex'"
-      style="position:absolute;bottom:24px;right:10px;z-index:999;
-             background:white;border:1px solid var(--border);border-radius:50%;
-             width:36px;height:36px;font-size:16px;cursor:pointer;
-             box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center"
-      title="Ver leyenda del mapa">🎨</button>
+      style="position:absolute;bottom:16px;right:10px;z-index:999;
+             background:rgba(255,255,255,0.85);border:1px solid #e2e8f0;border-radius:50%;
+             width:26px;height:26px;font-size:12px;cursor:pointer;
+             box-shadow:0 1px 4px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;
+             backdrop-filter:blur(3px);opacity:0.8"
+      title="Ver leyenda del mapa">🗺️</button>
 
     <!-- Modal leyenda -->
     <div id="legend-modal" onclick="if(event.target===this)this.style.display='none'"
@@ -1138,14 +1139,14 @@ function renderCalugas(clients) {
   const calugas = document.getElementById('shared-calugas');
   // Chips compactos: número grande + label mini en una sola línea
   const chip = (num, label, color, bg='transparent', bold=false) =>
-    `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 8px;border-radius:8px;background:${bg};border:1px solid ${color}20;min-width:44px;flex-shrink:0;cursor:default">
-      <span style="font-size:17px;font-weight:700;color:${color};line-height:1">${num}</span>
-      <span style="font-size:9px;color:${color};opacity:0.8;white-space:nowrap;margin-top:1px">${label}</span>
+    `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px 6px;border-radius:6px;background:${bg};border:1px solid ${color}20;min-width:36px;flex-shrink:0;cursor:default">
+      <span style="font-size:14px;font-weight:700;color:${color};line-height:1">${num}</span>
+      <span style="font-size:8px;color:${color};opacity:0.8;white-space:nowrap;margin-top:1px">${label}</span>
     </div>`;
   const chipWide = (top, bottom, color) =>
-    `<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:3px 8px;border-radius:8px;background:${color}10;border:1px solid ${color}30;min-width:80px;flex-shrink:0">
-      <span style="font-size:13px;font-weight:700;color:${color};line-height:1.2">${top}</span>
-      <span style="font-size:9px;color:var(--text2);white-space:nowrap">${bottom}</span>
+    `<div style="display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:2px 6px;border-radius:6px;background:${color}10;border:1px solid ${color}30;min-width:70px;flex-shrink:0">
+      <span style="font-size:11px;font-weight:700;color:${color};line-height:1.2;white-space:nowrap">${top}</span>
+      <span style="font-size:8px;color:var(--text2);white-space:nowrap">${bottom}</span>
     </div>`;
   calugas.innerHTML =
     chip(counts.ok,'OK','#3b82f6') +
