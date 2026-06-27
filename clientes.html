@@ -1493,16 +1493,41 @@ function renderDashboard() {
   // Clientes únicos del mes
   const clientesUnicos = new Set(soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
   
-  // Días hábiles transcurridos en el mes (aprox)
-  const diasMes = startOfDay.getDate();
-  const diasHabiles = Math.round(diasMes * 5/7);
-  const proyeccion = diasHabiles > 0 ? Math.round(totalMes / diasHabiles * 22) : 0;
-  
+  // Días hábiles reales (L-V) — contar exactamente desde el 1ro del mes hasta hoy
+  function contarDiasHabilesEnMes(desde, hasta) {
+    // desde: Date primer día del mes, hasta: Date hoy (inclusive)
+    let count = 0;
+    const d = new Date(desde);
+    while (d <= hasta) {
+      const dow = d.getDay(); // 0=Dom, 6=Sab
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function contarDiasHabilesTotalesMes(anio, mes) {
+    // Total días hábiles del mes completo
+    const primerDia = new Date(anio, mes, 1);
+    const ultimoDia = new Date(anio, mes + 1, 0); // último día del mes
+    return contarDiasHabilesEnMes(primerDia, ultimoDia);
+  }
+
+  const hoy = startOfDay;
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const diasHabilesTranscurridos = contarDiasHabilesEnMes(primerDiaMes, hoy);
+  const diasHabilesTotalesMes = contarDiasHabilesTotalesMes(hoy.getFullYear(), hoy.getMonth());
+  const diasHabilesRestantes = diasHabilesTotalesMes - diasHabilesTranscurridos;
+
+  // Meta proporcional al período transcurrido
+  const metaDia = META_MENSUAL / diasHabilesTotalesMes; // meta por día hábil
+  const metaSemana = metaDia * 5; // meta 5 días hábiles
+  const metaMesTranscurrido = metaDia * diasHabilesTranscurridos; // meta acumulada hasta hoy
+  const proyeccion = diasHabilesTranscurridos > 0
+    ? Math.round(totalMes / diasHabilesTranscurridos * diasHabilesTotalesMes)
+    : 0;
+
   // Variación mes vs mes anterior
   const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
-  
-  const metaDia = META_MENSUAL / 22;
-  const metaSemana = (META_MENSUAL / 22) * 5;
   
   function pct(v, m) { return Math.min(100, Math.round(v/m*100)); }
   function metaStr(v, m) {
@@ -1519,32 +1544,36 @@ function renderDashboard() {
     return `<span style="color:${v>=0?'#16a34a':'#dc2626'};font-size:11px">${v>=0?'+':''}${v}% vs mes ant.</span>`;
   }
 
+  // Texto descriptivo de la meta
+  const metaDiaFmt = '$' + Math.round(metaDia).toLocaleString('es-CL');
+  const metaMesTransFmt = '$' + Math.round(metaMesTranscurrido).toLocaleString('es-CL');
+
   document.getElementById('dash-calugas').innerHTML = `
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta hoy</div>
       <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
-      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos</div>
+      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos · meta ${metaDiaFmt}</div>
       ${metaStr(totalDia, metaDia)}
       ${bar(totalDia, metaDia)}
     </div>
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta semana</div>
       <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
-      <div style="font-size:11px;color:var(--text2)">L-V actual</div>
+      <div style="font-size:11px;color:var(--text2)">L-V · meta $${Math.round(metaSemana).toLocaleString('es-CL')}</div>
       ${metaStr(totalSemana, metaSemana)}
       ${bar(totalSemana, metaSemana)}
     </div>
     <div class="dash-caluga">
       <div class="dash-caluga-label">Venta mes</div>
       <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
-      ${varStr(varPct)}
-      ${metaStr(totalMes, META_MENSUAL)}
-      ${bar(totalMes, META_MENSUAL)}
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)} · meta al día: ${metaMesTransFmt}</div>
+      ${metaStr(totalMes, metaMesTranscurrido)}
+      ${bar(totalMes, metaMesTranscurrido)}
     </div>
     <div class="dash-caluga">
       <div class="dash-caluga-label">Proyección mes</div>
       <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
-      <div style="font-size:11px;color:var(--text2)">Al ritmo actual</div>
+      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${META_MENSUAL.toLocaleString('es-CL')}</div>
       ${metaStr(proyeccion, META_MENSUAL)}
       ${bar(proyeccion, META_MENSUAL)}
     </div>
