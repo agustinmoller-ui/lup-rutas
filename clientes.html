@@ -1957,12 +1957,7 @@ function showView(name, evt) {
     }
   }
   
-  // Filtro compartido: visible solo en mapa y lista
-  const sf = document.getElementById('shared-filter');
-  const sc = document.getElementById('shared-calugas');
-  const showShared = (name === 'map' || name === 'list');
-  if (sf) sf.style.display = showShared ? 'flex' : 'none';
-  if (sc) sc.style.display = showShared ? 'flex' : 'none';
+  // Filtros SIEMPRE visibles — nunca ocultar por cambio de vista
 
   if (name === 'map') {
     setTimeout(() => { if (map) map.invalidateSize(); }, 100);
