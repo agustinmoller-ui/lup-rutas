@@ -1086,6 +1086,10 @@ function renderCalugas(clients) {
       if (ultVis && (ultVis['Visita/Venta']||'') !== 'Venta') visitasSinVenta++;
     });
   }
+  // Ventas estimadas perdidas: suma ticket de clientes atrasados
+  const ventasPerdidas = clients
+    .filter(c => { const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento); return st === 'yellow' || st === 'red' || st === 'critical'; })
+    .reduce((s, c) => s + (c.ticketPromedio || 0), 0);
 
   const calugas = document.getElementById('shared-calugas');
   // Chips compactos: número grande + label mini en una sola línea
