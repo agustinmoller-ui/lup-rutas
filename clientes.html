@@ -325,7 +325,21 @@
     .config-input { width: 52px; font-size: 13px; padding: 4px 6px; }
 
     /* MAPA — leyenda mini, flotante, colapsable */
-    .map-legend { display: none; }
+    .map-legend {
+      bottom: 8px;
+      right: 8px;
+      top: auto;
+      padding: 5px 8px;
+      gap: 3px;
+      font-size: 10px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      max-width: 200px;
+      opacity: 0.92;
+    }
+    .legend-title { display: none; }
+    .legend-row { font-size: 10px; gap: 3px; }
+    .legend-dot { width: 8px; height: 8px; }
     .map-stats { display: none; }
     .leaflet-control-zoom { display: none; }
 
@@ -1529,14 +1543,16 @@ function renderDashboard() {
   // Variación mes vs mes anterior
   const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
   
-  function pct(v, m) { return Math.min(100, Math.round(v/m*100)); }
+  function pct(v, m) { return m > 0 ? Math.round(v/m*100) : 0; }
   function metaStr(v, m) {
     const p = pct(v,m);
-    return `<span style="color:${p>=100?'#16a34a':p>=60?'#ca8a04':'#dc2626'};font-size:11px;font-weight:600">${p}% meta</span>`;
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#ca8a04' : '#dc2626';
+    const icon = p >= 100 ? '✅' : p >= 70 ? '⚠️' : '🔴';
+    return `<span style="color:${color};font-size:11px;font-weight:600">${icon} ${p}% de meta ($${Math.round(m).toLocaleString('es-CL')})</span>`;
   }
   function bar(v, m) {
-    const p = pct(v,m);
-    const color = p >= 100 ? '#16a34a' : p >= 60 ? '#eab308' : '#ef4444';
+    const p = Math.min(100, pct(v,m));
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#eab308' : '#ef4444';
     return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
   }
   function varStr(v) {
