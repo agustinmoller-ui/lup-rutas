@@ -657,7 +657,7 @@
 </div>
 
 <!-- HISTORIAL MODAL -->
-<div class="modal-overlay" id="modal" style="display:none" onclick="closeModal(event)">
+<div class="modal-overlay" id="modal" style="display:none" onclick="closeModal(event)" ontouchend="event.stopPropagation()">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <div>
@@ -796,6 +796,8 @@ function precomputeClientMetrics() {
 }
 
 function toggleFilters() {
+  // Ignorar si el modal acaba de cerrarse (evita collapse accidental)
+  if (_modalJustClosed) return;
   const panel = document.getElementById('shared-filter');
   const arrow = document.getElementById('filter-arrow');
   const isOpen = panel.style.display !== 'none';
@@ -1497,20 +1499,25 @@ function openHistorial(codigo) {
   document.getElementById('modal').style.display = 'flex';
 }
 
+let _modalJustClosed = false;
 function closeModal(e) {
   if (!e || e.target === document.getElementById('modal')) {
+    // Marcar que el modal acaba de cerrarse para bloquear toggleFilters
+    _modalJustClosed = true;
+    setTimeout(() => { _modalJustClosed = false; }, 400);
+    
     document.getElementById('modal').style.display = 'none';
     if (chartHist) { chartHist.destroy(); chartHist = null; }
+    
     // Restaurar shared-filter si la vista activa es mapa o lista
     const activeView = document.querySelector('.view.active')?.id;
     if (activeView === 'view-map' || activeView === 'view-list') {
       const sf = document.getElementById('shared-filter');
       const sc = document.getElementById('shared-calugas');
-      if (sf) sf.style.display = 'flex';
-      if (sc) sc.style.display = 'flex';
-      // Asegurarse de que el panel interno esté visible también
-      const filterPanel = document.getElementById('shared-filter');
-      if (filterPanel) filterPanel.style.display = 'flex';
+      const arrow = document.getElementById('filter-arrow');
+      if (sf) { sf.style.display = 'flex'; }
+      if (sc) { sc.style.display = 'flex'; }
+      if (arrow) { arrow.textContent = '▲'; }
     }
   }
 }
