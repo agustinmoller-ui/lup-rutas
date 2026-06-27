@@ -686,6 +686,34 @@
 // ============================================================
 // CONFIG
 // ============================================================
+
+// DEBUG: interceptar ocultamiento de filtros
+window.__debugFilterHide = true;
+const __origGetEl = document.getElementById.bind(document);
+
+// MutationObserver para capturar cambios de display en shared-filter
+document.addEventListener('DOMContentLoaded', function() {
+  const target = document.getElementById('shared-filter');
+  if (!target) return;
+  const obs = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      if (m.attributeName === 'style') {
+        const disp = target.style.display;
+        if (disp === 'none') {
+          console.error('🚨 shared-filter OCULTO', new Error().stack);
+          // Mostrar toast en pantalla
+          const t = document.createElement('div');
+          t.style.cssText = 'position:fixed;top:60px;left:10px;right:10px;background:#ef4444;color:white;padding:10px;border-radius:8px;font-size:11px;z-index:99999;word-break:break-all';
+          t.textContent = '🚨 HIDE: ' + new Error().stack.split('\n').slice(1,4).join(' | ');
+          document.body.appendChild(t);
+          setTimeout(() => t.remove(), 8000);
+        }
+      }
+    });
+  });
+  obs.observe(target, { attributes: true });
+});
+
 const SHEET_ID = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
 const META_DIARIA = 2000000; // meta por día hábil
 let mostrarTodos = false; // switch: seguimiento vs todos
