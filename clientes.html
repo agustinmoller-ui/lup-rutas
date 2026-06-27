@@ -461,15 +461,15 @@
         <option value="critical">⚫ Crítico</option>
       </select>
       <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
-      <select id="list-nivel-ventas" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px">
-        <option value="">$ Todos</option>
-        <option value="gt100000">Mayor $100k</option>
-        <option value="gt50000">Mayor $50k</option>
-        <option value="gt20000">Mayor $20k</option>
-        <option value="gt10000">Mayor $10k</option>
-        <option value="lt10000">Menor $10k</option>
-        <option value="sin_venta">Sin ventas</option>
-      </select>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
+          <span id="ticket-slider-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
+        </div>
+        <input type="range" id="list-ticket-slider" min="0" max="200000" step="5000" value="0"
+          style="width:100%;accent-color:#3b82f6;cursor:pointer"
+          oninput="updateTicketSlider(this.value)" onchange="renderList()">
+      </div>
 
     </div>
     <div class="calugas-row" id="list-calugas"></div>
@@ -738,6 +738,12 @@ async function loadData(force = false) {
     initFilters();
     initMap();
     renderMapMarkers();
+    // Ajustar max del slider al ticket máximo real del dataset
+    const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
+    const sliderEl = document.getElementById('list-ticket-slider');
+    if (sliderEl && maxTick > 0) {
+      sliderEl.max = Math.ceil(maxTick / 10000) * 10000;
+    }
     renderList();
     renderAlerts();
     renderDashboard();
@@ -1078,6 +1084,12 @@ function renderMapMarkers() {
 // ============================================================
 // LIST
 // ============================================================
+function updateTicketSlider(val) {
+  const v = parseInt(val);
+  const label = document.getElementById('ticket-slider-label');
+  if (label) label.textContent = v === 0 ? '$ Todos' : '$' + v.toLocaleString('es-CL') + '+';
+}
+
 function getFilteredClients(prefix = 'list') {
   const search = document.getElementById(`${prefix}-search`)?.value.toLowerCase() || '';
   const comuna = document.getElementById(`${prefix}-comuna`)?.value || '';
@@ -1092,6 +1104,12 @@ function getFilteredClients(prefix = 'list') {
     if (vendedor && c.vendedor !== vendedor) return false;
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     if (status && st !== status) return false;
+    // Filtro ticket slider
+    const sliderEl = document.getElementById('list-ticket-slider');
+    if (sliderEl) {
+      const minTicket = parseInt(sliderEl.value) || 0;
+      if (minTicket > 0 && (c.ticketPromedio || 0) < minTicket) return false;
+    }
     return true;
   });
 }
