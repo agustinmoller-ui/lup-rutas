@@ -398,8 +398,7 @@
   <div class="nav-logo">LUP</div>
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="showView('map')">🗺️ Mapa</button>
-    <button class="tab-btn" onclick="showView('list')">📋 Lista</button>
-    <button class="tab-btn" onclick="showView('alerts')">🔔 Alertas</button>
+    <button class="tab-btn" onclick="showView('list')">🔔 Lista</button>
     <button class="tab-btn" onclick="showView('dashboard')">📊 Ventas</button>
     <button class="tab-btn admin-only" onclick="showView('admin')">🔐 Admin</button>
   </div>
@@ -453,8 +452,8 @@
 
   <!-- ===== LIST VIEW ===== -->
   <div class="view" id="view-list">
-    <div class="filter-bar">
-      <input type="text" id="list-search" placeholder="🔍 Buscar..." oninput="renderList()">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+      <input type="text" id="list-search" placeholder="🔍 Buscar..." oninput="renderList()" style="flex:1 1 100%">
       <select id="list-comuna" onchange="renderList()"><option value="">Todas las comunas</option></select>
       <select id="list-status" onchange="renderList()">
         <option value="">Todos los estados</option>
@@ -474,7 +473,24 @@
           style="width:100%;accent-color:#3b82f6;cursor:pointer"
           oninput="updateTicketSlider(this.value)" onchange="renderList()">
       </div>
-
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Sin visita mín.</span>
+          <span id="list-dias-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        </div>
+        <input type="range" id="list-dias-slider" min="0" max="90" step="1" value="0"
+          style="width:100%;accent-color:#ef4444;cursor:pointer"
+          oninput="document.getElementById('list-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="renderList()">
+      </div>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Sin venta en</span>
+          <span id="list-vsv-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        </div>
+        <input type="range" id="list-vsv-slider" min="0" max="10" step="1" value="0"
+          style="width:100%;accent-color:#eab308;cursor:pointer"
+          oninput="document.getElementById('list-vsv-label').textContent=this.value==0?'Todos':this.value+' visitas'" onchange="renderList()">
+      </div>
     </div>
     <div class="calugas-row" id="list-calugas"></div>
     <div class="list-view-inner">
@@ -497,40 +513,6 @@
         </table>
       </div>
     </div>
-  </div>
-
-  <!-- ===== ALERTS VIEW ===== -->
-  <div class="view" id="view-alerts">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin visita mín.</span>
-          <span id="alert-dias-label" style="font-weight:600;font-size:12px;color:var(--text)">30 días</span>
-        </div>
-        <input type="range" id="alert-dias" min="1" max="90" step="1" value="30"
-          style="width:100%;accent-color:#ef4444;cursor:pointer"
-          oninput="document.getElementById('alert-dias-label').textContent=this.value+' días'" onchange="renderAlerts()">
-      </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin venta en</span>
-          <span id="alert-vsv-label" style="font-weight:600;font-size:12px;color:var(--text)">3 visitas</span>
-        </div>
-        <input type="range" id="alert-visitas-sin-venta" min="1" max="10" step="1" value="3"
-          style="width:100%;accent-color:#eab308;cursor:pointer"
-          oninput="document.getElementById('alert-vsv-label').textContent=this.value+' visitas'" onchange="renderAlerts()">
-      </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
-          <span id="alert-ticket-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
-        </div>
-        <input type="range" id="alert-ticket-slider" min="0" max="200000" step="5000" value="0"
-          style="width:100%;accent-color:#3b82f6;cursor:pointer"
-          oninput="updateAlertTicketSlider(this.value)" onchange="renderAlerts()">
-      </div>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:16px;" id="alerts-body"></div>
   </div>
 
   <!-- ===== DASHBOARD VIEW ===== -->
@@ -768,8 +750,6 @@ async function loadData(force = false) {
     const maxSlider = Math.ceil(maxTick / 10000) * 10000;
     const sliderEl = document.getElementById('list-ticket-slider');
     if (sliderEl && maxTick > 0) sliderEl.max = maxSlider;
-    const alertSliderEl = document.getElementById('alert-ticket-slider');
-    if (alertSliderEl && maxTick > 0) alertSliderEl.max = maxSlider;
     renderList();
     renderAlerts();
     renderDashboard();
@@ -1131,25 +1111,44 @@ function updateTicketSlider(val) {
 }
 
 function getFilteredClients(prefix = 'list') {
-  const search = document.getElementById(`${prefix}-search`)?.value.toLowerCase() || '';
-  const comuna = document.getElementById(`${prefix}-comuna`)?.value || '';
-  const status = document.getElementById(`${prefix}-status`)?.value || '';
+  const search   = document.getElementById(`${prefix}-search`)?.value.toLowerCase() || '';
+  const comuna   = document.getElementById(`${prefix}-comuna`)?.value || '';
+  const status   = document.getElementById(`${prefix}-status`)?.value || '';
   const vendedor = document.getElementById(`${prefix}-vendedor`)?.value || '';
-  const soloSeg = true; // solo seguimiento
-  
+
+  // Sliders
+  const minTicket = parseInt(document.getElementById('list-ticket-slider')?.value) || 0;
+  const minDias   = parseInt(document.getElementById('list-dias-slider')?.value) || 0;
+  const minVSV    = parseInt(document.getElementById('list-vsv-slider')?.value) || 0;
+
+  // Pre-calcular set sin venta si slider activo
+  let sinVentaSet = null;
+  if (minVSV > 0) {
+    sinVentaSet = new Set();
+    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
+      const vis = (visitasData || [])
+        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
+        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))
+        .slice(0, minVSV);
+      if (vis.length >= minVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
+        sinVentaSet.add(c.codigo);
+      }
+    });
+  }
+
   return Object.values(allClientsMap).filter(c => {
-    if (soloSeg && !c.enSeguimiento) return false;
+    if (!c.enSeguimiento) return false;
     if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
     if (comuna && c.comuna !== comuna) return false;
     if (vendedor && c.vendedor !== vendedor) return false;
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     if (status && st !== status) return false;
-    // Filtro ticket slider
-    const sliderEl = document.getElementById('list-ticket-slider');
-    if (sliderEl) {
-      const minTicket = parseInt(sliderEl.value) || 0;
-      if (minTicket > 0 && (c.ticketPromedio || 0) < minTicket) return false;
-    }
+    // Slider ticket
+    if (minTicket > 0 && (c.ticketPromedio || 0) < minTicket) return false;
+    // Slider sin visita: días sin contacto >= umbral
+    if (minDias > 0 && (parseFloat(c.diasSinContacto) || 0) < minDias) return false;
+    // Slider sin venta: debe estar en el set calculado
+    if (sinVentaSet !== null && !sinVentaSet.has(c.codigo)) return false;
     return true;
   });
 }
@@ -1194,20 +1193,48 @@ function renderList() {
   // Ventas est. perdidas = suma de tickets de clientes fuera de frecuencia
   // Representa lo que habrían comprado si hubieran sido visitados a tiempo
   const ventasPerdidas = ticketSumFuera;
+  // Métricas adicionales para calugas
+  const clientsConDias = clients.filter(c => parseFloat(c.diasSinContacto) > 0);
+  const promDiasSin = clientsConDias.length
+    ? Math.round(clientsConDias.reduce((s,c) => s + parseFloat(c.diasSinContacto), 0) / clientsConDias.length)
+    : 0;
+  const clientsConTicket = clients.filter(c => c.ticketPromedio > 0);
+  const promTicket = clientsConTicket.length
+    ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
+    : 0;
+  const pctAlerta = clients.length ? Math.round(((counts.yellow+counts.red+counts.critical)/clients.length)*100) : 0;
+
   const calugas = document.getElementById('list-calugas');
   calugas.innerHTML = `
-    <div class="caluga ok"><div class="caluga-num" style="color:#3b82f6">${counts.ok}</div><div class="caluga-label">🔵 OK</div></div>
-    <div class="caluga green"><div class="caluga-num" style="color:#22c55e">${counts.green}</div><div class="caluga-label">🟢 Verde</div></div>
-    <div class="caluga yellow"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
-    <div class="caluga red"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
-    <div class="caluga critical"><div class="caluga-num" style="color:#dc2626">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
+    <div class="caluga ok" title="En frecuencia, margen positivo"><div class="caluga-num" style="color:#3b82f6">${counts.ok}</div><div class="caluga-label">🔵 OK</div></div>
+    <div class="caluga green" title="0-4 días de margen"><div class="caluga-num" style="color:#22c55e">${counts.green}</div><div class="caluga-label">🟢 Verde</div></div>
+    <div class="caluga yellow" title="-1 a -5 días de atraso"><div class="caluga-num" style="color:#eab308">${counts.yellow}</div><div class="caluga-label">🟡 Amarillo</div></div>
+    <div class="caluga red" title="-6 a -10 días de atraso"><div class="caluga-num" style="color:#ef4444">${counts.red}</div><div class="caluga-label">🔴 Rojo</div></div>
+    <div class="caluga critical" title="Más de 10 días de atraso"><div class="caluga-num" style="color:#dc2626">${counts.critical}</div><div class="caluga-label">⚫ Crítico</div></div>
     <div class="caluga" style="min-width:90px"><div class="caluga-num" style="color:#64748b">${counts.nodata}</div><div class="caluga-label">⚪ Sin visita</div></div>
-    <div class="caluga" style="min-width:90px;border-left:2px solid var(--border)"><div class="caluga-num" style="color:var(--text);font-size:16px">${clients.length}</div><div class="caluga-label">📊 Total</div></div>
-    <div class="caluga" style="border-left:3px solid #eab308;min-width:200px">
-      <div class="caluga-label">Fuera de frecuencia</div>
+    <div class="caluga" style="border-left:3px solid #eab308;min-width:110px">
       <div class="caluga-num" style="color:#eab308">${totalFueraFrecuencia}</div>
-      <div class="caluga-sub">Ventas est. perdidas:</div>
-      <div class="caluga-lost" style="color:#ef4444">$${Math.round(ventasPerdidas).toLocaleString('es-CL')}</div>
+      <div class="caluga-label">⏰ Fuera frec.</div>
+      <div class="caluga-sub">${pctAlerta}% del total</div>
+    </div>
+    <div class="caluga" style="border-left:3px solid #64748b;min-width:110px">
+      <div class="caluga-num" style="color:var(--text);font-size:20px">${promDiasSin}d</div>
+      <div class="caluga-label">📅 Días sin visita</div>
+      <div class="caluga-sub">promedio</div>
+    </div>
+    <div class="caluga" style="border-left:3px solid #3b82f6;min-width:140px">
+      <div class="caluga-num" style="color:#3b82f6;font-size:16px">$${promTicket.toLocaleString('es-CL')}</div>
+      <div class="caluga-label">💰 Ticket prom.</div>
+      <div class="caluga-sub">${clientsConTicket.length} con compras</div>
+    </div>
+    <div class="caluga" style="border-left:3px solid #ef4444;min-width:160px">
+      <div class="caluga-label">💸 Ventas est. perdidas</div>
+      <div class="caluga-lost" style="color:#ef4444;font-size:18px;font-weight:700;margin-top:4px">$${Math.round(ventasPerdidas).toLocaleString('es-CL')}</div>
+      <div class="caluga-sub">${totalFueraFrecuencia} clientes atrasados</div>
+    </div>
+    <div class="caluga" style="min-width:80px;border-left:2px solid var(--border)">
+      <div class="caluga-num" style="color:var(--text);font-size:18px">${clients.length}</div>
+      <div class="caluga-label">📊 Total filtrado</div>
     </div>
   `;
   
