@@ -1500,6 +1500,10 @@ function openHistorial(codigo) {
     </tr>`;
   }).join('');
   
+  // Guardar estado del filtro antes de abrir el modal
+  const sf0 = document.getElementById('shared-filter');
+  _filterStateBeforeModal = sf0 ? sf0.style.display : null;
+
   const modalEl = document.getElementById('modal');
   modalEl.style.display = 'flex';
   modalEl.style.visibility = 'visible';
@@ -1507,26 +1511,27 @@ function openHistorial(codigo) {
 }
 
 let _modalJustClosed = false;
+let _filterStateBeforeModal = null;
 function closeModal(e) {
   // Cerrar si se clickea el overlay (fondo) o si se llama sin evento (botón X)
   if (!e || e.target === document.getElementById('modal')) {
     const modalEl2 = document.getElementById('modal');
-    // Desactivar inmediatamente los eventos del modal para no interferir con lo que hay detrás
     modalEl2.style.pointerEvents = 'none';
     modalEl2.style.visibility = 'hidden';
     modalEl2.style.display = 'none';
     if (chartHist) { chartHist.destroy(); chartHist = null; }
     
-    // Restaurar shared-filter
-    const activeView = document.querySelector('.view.active')?.id;
-    if (activeView === 'view-map' || activeView === 'view-list') {
-      const sf = document.getElementById('shared-filter');
-      const sc = document.getElementById('shared-calugas');
-      const arrow = document.getElementById('filter-arrow');
-      if (sf) sf.style.display = 'flex';
-      if (sc) sc.style.display = 'flex';
-      if (arrow) arrow.textContent = '▲';
+    // Restaurar filtro EXACTAMENTE como estaba antes de abrir el modal
+    const sf = document.getElementById('shared-filter');
+    const sc = document.getElementById('shared-calugas');
+    const arrow = document.getElementById('filter-arrow');
+    if (sf && _filterStateBeforeModal !== null) {
+      sf.style.display = _filterStateBeforeModal;
+      // Sincronizar flecha con el estado real
+      if (arrow) arrow.textContent = (_filterStateBeforeModal === 'none') ? '▼' : '▲';
     }
+    if (sc) sc.style.display = (sf && sf.style.display === 'none') ? 'none' : 'flex';
+    _filterStateBeforeModal = null;
   }
 }
 
