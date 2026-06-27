@@ -413,7 +413,7 @@
 
   <!-- ===== MAP VIEW ===== -->
   <div class="view active" id="view-map" style="position:relative;">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:3px">
       <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()" style="flex:1 1 100%">
       <select id="map-comuna" onchange="filterMap()"><option value="">Todas las comunas</option></select>
       <select id="map-status" onchange="filterMap()">
@@ -426,28 +426,28 @@
         <option value="nodata">⚪ Sin datos</option>
       </select>
       <select id="map-vendedor" onchange="filterMap()"><option value="">Todos los vendedores</option></select>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
-          <span id="map-ticket-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Ticket mín.</span>
+          <span id="map-ticket-label" style="font-weight:600;font-size:11px;color:var(--text)">$ Todos</span>
         </div>
         <input type="range" id="map-ticket-slider" min="0" max="200000" step="5000" value="0"
           style="width:100%;accent-color:#3b82f6;cursor:pointer"
           oninput="document.getElementById('map-ticket-label').textContent=this.value==0?'$ Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+'" onchange="filterMap()">
       </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin visita mín.</span>
-          <span id="map-dias-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Sin visita mín.</span>
+          <span id="map-dias-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
         </div>
         <input type="range" id="map-dias-slider" min="0" max="90" step="1" value="0"
           style="width:100%;accent-color:#ef4444;cursor:pointer"
           oninput="document.getElementById('map-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="filterMap()">
       </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin venta en</span>
-          <span id="map-vsv-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Sin venta en</span>
+          <span id="map-vsv-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
         </div>
         <input type="range" id="map-vsv-slider" min="0" max="10" step="1" value="0"
           style="width:100%;accent-color:#eab308;cursor:pointer"
@@ -469,7 +469,7 @@
 
   <!-- ===== LIST VIEW ===== -->
   <div class="view" id="view-list">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:3px">
       <input type="text" id="list-search" placeholder="🔍 Buscar..." oninput="renderList()" style="flex:1 1 100%">
       <select id="list-comuna" onchange="renderList()"><option value="">Todas las comunas</option></select>
       <select id="list-status" onchange="renderList()">
@@ -482,27 +482,27 @@
       </select>
       <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
       <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
-          <span id="ticket-slider-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Ticket mín.</span>
+          <span id="ticket-slider-label" style="font-weight:600;font-size:11px;color:var(--text)">$ Todos</span>
         </div>
         <input type="range" id="list-ticket-slider" min="0" max="200000" step="5000" value="0"
           style="width:100%;accent-color:#3b82f6;cursor:pointer"
           oninput="updateTicketSlider(this.value)" onchange="renderList()">
       </div>
       <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin visita mín.</span>
-          <span id="list-dias-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Sin visita mín.</span>
+          <span id="list-dias-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
         </div>
         <input type="range" id="list-dias-slider" min="0" max="90" step="1" value="0"
           style="width:100%;accent-color:#ef4444;cursor:pointer"
           oninput="document.getElementById('list-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="renderList()">
       </div>
       <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <span style="color:var(--text2);font-size:11px">Sin venta en</span>
-          <span id="list-vsv-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
+          <span style="color:var(--text2);font-size:10px">Sin venta en</span>
+          <span id="list-vsv-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
         </div>
         <input type="range" id="list-vsv-slider" min="0" max="10" step="1" value="0"
           style="width:100%;accent-color:#eab308;cursor:pointer"
@@ -535,7 +535,7 @@
   <!-- ===== DASHBOARD VIEW ===== -->
   <div class="view" id="view-dashboard">
     <!-- Filtros de período y vendedor -->
-    <div class="filter-bar" style="flex-wrap:wrap;gap:6px;padding:10px 16px 6px">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:3px;padding:5px 8px">
       <div id="dash-periodos" style="display:flex;gap:4px">
         <button class="periodo-btn active" data-periodo="hoy" onclick="setPeriodo(this)">Hoy</button>
         <button class="periodo-btn" data-periodo="semana" onclick="setPeriodo(this)">Semana</button>
@@ -1386,8 +1386,8 @@ function openHistorial(codigo) {
   // Visitas del cliente
   const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
     .sort((a,b) => {
-      const da = new Date(a['Fecha Visita'] || a['date'] || 0);
-      const db = new Date(b['Fecha Visita'] || b['date'] || 0);
+      const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
+      const db = parseDate(b['Fecha Visita'] || b['date']) || new Date(0);
       return db - da;
     });
   
@@ -1443,14 +1443,13 @@ function openHistorial(codigo) {
     // Calcular días desde visita anterior (i+1 es la visita anterior porque está ordenado desc)
     let diasGap = '—';
     let gapColor = '#64748b';
-    const fechaActual = new Date(v['Fecha Visita'] || 0);
+    const fechaActual = parseDate(v['Fecha Visita']);
     const siguiente = visitasSlice[i + 1];
-    if (siguiente && fechaActual > 0) {
-      const fechaAnterior = new Date(siguiente['Fecha Visita'] || 0);
-      if (fechaAnterior > 0 && fechaActual > fechaAnterior) {
+    if (siguiente && fechaActual) {
+      const fechaAnterior = parseDate(siguiente['Fecha Visita']);
+      if (fechaAnterior && fechaActual > fechaAnterior) {
         const diff = Math.round((fechaActual - fechaAnterior) / (1000*60*60*24));
         diasGap = diff + 'd';
-        // Color según urgencia: verde <14, amarillo 14-21, rojo >21
         gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
       }
     }
