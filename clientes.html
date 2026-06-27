@@ -1873,9 +1873,31 @@ function showView(name) {
 }
 
 // ============================================================
-// INIT
+// INIT + AUTO-REFRESH
 // ============================================================
 loadData();
+
+// Auto-refresh cada 5 minutos (300.000 ms) — 0 créditos, lee CSV directo
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
+setInterval(async () => {
+  // Solo refresca si la pestaña está visible
+  if (document.visibilityState === 'hidden') return;
+  await loadData(true);
+  // Mostrar brevemente el timestamp actualizado sin interrumpir al usuario
+}, AUTO_REFRESH_INTERVAL);
+
+// Contador regresivo en el botón de refresh
+let countdown = AUTO_REFRESH_INTERVAL / 1000;
+const refreshBtn = document.getElementById('refresh-btn');
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) countdown = AUTO_REFRESH_INTERVAL / 1000;
+  if (refreshBtn && !refreshBtn.disabled) {
+    const min = Math.floor(countdown / 60);
+    const sec = String(countdown % 60).padStart(2, '0');
+    refreshBtn.title = `Próximo refresco: ${min}:${sec}`;
+  }
+}, 1000);
 </script>
 </body>
 </html>
