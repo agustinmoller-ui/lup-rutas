@@ -461,14 +461,58 @@
   <!-- ===== MAP VIEW ===== -->
   <div class="view active" id="view-map" style="position:relative;">
     <div id="map"></div>
-    <div class="map-legend">
-      <div class="legend-title">Días faltantes</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#3b82f6"></div>OK ≥5</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#22c55e"></div>Verde 0–4</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#eab308"></div>Amar. -1/-5</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Rojo -6/-10</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#7f1d1d"></div>Crítico &lt;-10</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#64748b"></div>Sin datos</div>
+    <!-- Botón flotante leyenda -->
+    <button onclick="document.getElementById('legend-modal').style.display='flex'"
+      style="position:absolute;bottom:24px;right:10px;z-index:999;
+             background:white;border:1px solid var(--border);border-radius:50%;
+             width:36px;height:36px;font-size:16px;cursor:pointer;
+             box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center"
+      title="Ver leyenda del mapa">🎨</button>
+
+    <!-- Modal leyenda -->
+    <div id="legend-modal" onclick="if(event.target===this)this.style.display='none'"
+      style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);
+             align-items:center;justify-content:center;padding:20px">
+      <div style="background:white;border-radius:16px;padding:20px 24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <span style="font-weight:700;font-size:15px">🗺️ Leyenda del mapa</span>
+          <button onclick="document.getElementById('legend-modal').style.display='none'"
+            style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b">✕</button>
+        </div>
+        <p style="font-size:12px;color:#64748b;margin:0 0 12px">
+          Los colores indican <b>días faltantes</b> = Frecuencia ideal − Días sin visita.<br>
+          Valor positivo = aún dentro de plazo. Negativo = atrasado.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#3b82f6;flex-shrink:0"></div>
+            <div><b style="color:#3b82f6">Azul — OK</b> <span style="font-size:12px;color:#64748b">≥ 5 días de margen restante</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#22c55e;flex-shrink:0"></div>
+            <div><b style="color:#22c55e">Verde</b> <span style="font-size:12px;color:#64748b">0 a 4 días de margen</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#eab308;flex-shrink:0"></div>
+            <div><b style="color:#eab308">Amarillo</b> <span style="font-size:12px;color:#64748b">1 a 5 días de atraso</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#ef4444;flex-shrink:0"></div>
+            <div><b style="color:#ef4444">Rojo</b> <span style="font-size:12px;color:#64748b">6 a 10 días de atraso</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#7f1d1d;flex-shrink:0"></div>
+            <div><b style="color:#7f1d1d">Crítico</b> <span style="font-size:12px;color:#64748b">más de 10 días de atraso</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:14px;height:14px;border-radius:50%;background:#64748b;flex-shrink:0"></div>
+            <div><b style="color:#64748b">Gris</b> <span style="font-size:12px;color:#64748b">Sin historial de visitas</span></div>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center">
+          Toca cualquier punto del mapa para ver el detalle del cliente
+        </div>
+      </div>
     </div>
     <div class="map-stats" id="map-stats"></div>
   </div>
