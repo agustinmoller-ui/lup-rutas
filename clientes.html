@@ -413,45 +413,46 @@
 
   <!-- ===== MAP VIEW ===== -->
   <div class="view active" id="view-map" style="position:relative;">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:3px">
-      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()" style="flex:1 1 100%">
-      <select id="map-comuna" onchange="filterMap()"><option value="">Todas las comunas</option></select>
-      <select id="map-status" onchange="filterMap()">
-        <option value="">Todos los estados</option>
-        <option value="ok">🔵 OK (≥5 días)</option>
-        <option value="green">🟢 Verde (0-4)</option>
-        <option value="yellow">🟡 Amarillo (-1 a -5)</option>
-        <option value="red">🔴 Rojo (-6 a -10)</option>
-        <option value="critical">⚫ Crítico (&lt;-10)</option>
-        <option value="nodata">⚪ Sin datos</option>
-      </select>
-      <select id="map-vendedor" onchange="filterMap()"><option value="">Todos los vendedores</option></select>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Ticket mín.</span>
-          <span id="map-ticket-label" style="font-weight:600;font-size:11px;color:var(--text)">$ Todos</span>
-        </div>
-        <input type="range" id="map-ticket-slider" min="0" max="200000" step="5000" value="0"
-          style="width:100%;accent-color:#3b82f6;cursor:pointer"
-          oninput="document.getElementById('map-ticket-label').textContent=this.value==0?'$ Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+'" onchange="filterMap()">
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+        <select id="map-comuna" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Comunas</option></select>
+        <select id="map-status" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none">
+          <option value="">Estado</option>
+          <option value="ok">🔵 OK</option>
+          <option value="green">🟢 Verde</option>
+          <option value="yellow">🟡 Amarillo</option>
+          <option value="red">🔴 Rojo</option>
+          <option value="critical">⚫ Crítico</option>
+        </select>
+        <select id="map-vendedor" onchange="filterMap()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
       </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Sin visita mín.</span>
-          <span id="map-dias-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>💵 Ticket</span><span id="map-ticket-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="map-ticket-slider" min="0" max="200000" step="5000" value="0"
+            style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
+            oninput="document.getElementById('map-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+'" onchange="filterMap()">
         </div>
-        <input type="range" id="map-dias-slider" min="0" max="90" step="1" value="0"
-          style="width:100%;accent-color:#ef4444;cursor:pointer"
-          oninput="document.getElementById('map-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="filterMap()">
-      </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px 7px;font-size:11px;flex:1;min-width:110px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Sin venta en</span>
-          <span id="map-vsv-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>📅 Sin visita</span><span id="map-dias-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="map-dias-slider" min="0" max="90" step="1" value="0"
+            style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
+            oninput="document.getElementById('map-dias-label').textContent=this.value==0?'Todos':this.value+'d+'" onchange="filterMap()">
         </div>
-        <input type="range" id="map-vsv-slider" min="0" max="10" step="1" value="0"
-          style="width:100%;accent-color:#eab308;cursor:pointer"
-          oninput="document.getElementById('map-vsv-label').textContent=this.value==0?'Todos':this.value+' visitas'" onchange="filterMap()">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>🚫 Sin venta</span><span id="map-vsv-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="map-vsv-slider" min="0" max="10" step="1" value="0"
+            style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
+            oninput="document.getElementById('map-vsv-label').textContent=this.value==0?'Todos':this.value+'v'" onchange="filterMap()">
+        </div>
       </div>
     </div>
     <div id="map"></div>
@@ -469,44 +470,49 @@
 
   <!-- ===== LIST VIEW ===== -->
   <div class="view" id="view-list">
-    <div class="filter-bar" style="flex-wrap:wrap;gap:3px">
-      <input type="text" id="list-search" placeholder="🔍 Buscar..." oninput="renderList()" style="flex:1 1 100%">
-      <select id="list-comuna" onchange="renderList()"><option value="">Todas las comunas</option></select>
-      <select id="list-status" onchange="renderList()">
-        <option value="">Todos los estados</option>
-        <option value="ok">🔵 OK</option>
-        <option value="green">🟢 Verde</option>
-        <option value="yellow">🟡 Amarillo</option>
-        <option value="red">🔴 Rojo</option>
-        <option value="critical">⚫ Crítico</option>
-      </select>
-      <select id="list-vendedor" onchange="renderList()"><option value="">Todos los vendedores</option></select>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Ticket mín.</span>
-          <span id="ticket-slider-label" style="font-weight:600;font-size:11px;color:var(--text)">$ Todos</span>
-        </div>
-        <input type="range" id="list-ticket-slider" min="0" max="200000" step="5000" value="0"
-          style="width:100%;accent-color:#3b82f6;cursor:pointer"
-          oninput="updateTicketSlider(this.value)" onchange="renderList()">
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+      <!-- Fila 1: búsqueda -->
+      <input type="text" id="list-search" placeholder="🔍 Buscar cliente..." oninput="renderList()"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      <!-- Fila 2: 3 selects en grilla -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+        <select id="list-comuna" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Comunas</option></select>
+        <select id="list-status" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none">
+          <option value="">Estado</option>
+          <option value="ok">🔵 OK</option>
+          <option value="green">🟢 Verde</option>
+          <option value="yellow">🟡 Amarillo</option>
+          <option value="red">🔴 Rojo</option>
+          <option value="critical">⚫ Crítico</option>
+        </select>
+        <select id="list-vendedor" onchange="renderList()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
       </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Sin visita mín.</span>
-          <span id="list-dias-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
+      <!-- Fila 3: 3 sliders compactos en grilla -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>💵 Ticket</span><span id="ticket-slider-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="list-ticket-slider" min="0" max="200000" step="5000" value="0"
+            style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
+            oninput="updateTicketSlider(this.value)" onchange="renderList()">
         </div>
-        <input type="range" id="list-dias-slider" min="0" max="90" step="1" value="0"
-          style="width:100%;accent-color:#ef4444;cursor:pointer"
-          oninput="document.getElementById('list-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="renderList()">
-      </div>
-      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:140px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1px">
-          <span style="color:var(--text2);font-size:10px">Sin venta en</span>
-          <span id="list-vsv-label" style="font-weight:600;font-size:11px;color:var(--text)">Todos</span>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>📅 Sin visita</span><span id="list-dias-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="list-dias-slider" min="0" max="90" step="1" value="0"
+            style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
+            oninput="document.getElementById('list-dias-label').textContent=this.value==0?'Todos':this.value+'d+'" onchange="renderList()">
         </div>
-        <input type="range" id="list-vsv-slider" min="0" max="10" step="1" value="0"
-          style="width:100%;accent-color:#eab308;cursor:pointer"
-          oninput="document.getElementById('list-vsv-label').textContent=this.value==0?'Todos':this.value+' visitas'" onchange="renderList()">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:1px">
+            <span>🚫 Sin venta</span><span id="list-vsv-label" style="font-weight:700;color:var(--text)">Todos</span>
+          </div>
+          <input type="range" id="list-vsv-slider" min="0" max="10" step="1" value="0"
+            style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
+            oninput="document.getElementById('list-vsv-label').textContent=this.value==0?'Todos':this.value+'v'" onchange="renderList()">
+        </div>
       </div>
     </div>
     <div class="calugas-row" id="list-calugas"></div>
