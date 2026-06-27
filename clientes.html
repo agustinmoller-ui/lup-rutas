@@ -675,7 +675,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Fecha</th><th>Días desde ant.</th><th>Tipo</th><th>Vendedor</th><th>Monto</th>
+            <th>Fecha</th><th>Gap</th><th>Tipo</th><th>Dist.</th><th>Vendedor</th><th>Monto</th>
           </tr></thead>
           <tbody id="modal-hist-body"></tbody>
         </table>
@@ -1481,10 +1481,14 @@ function openHistorial(codigo) {
         gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
       }
     }
+    const dist = parseFloat(v['Distancia']);
+    const distStr = !isNaN(dist) && dist > 0 ? (dist >= 1 ? dist.toFixed(1)+'km' : Math.round(dist*1000)+'m') : '—';
+    const distColor = !isNaN(dist) && dist > 2 ? '#ef4444' : (!isNaN(dist) && dist > 0.5 ? '#eab308' : '#64748b');
     return `<tr>
       <td style="white-space:nowrap">${v['Fecha Visita'] || '—'}</td>
       <td style="text-align:center"><span style="font-weight:700;color:${gapColor};font-size:13px">${diasGap}</span></td>
       <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="text-align:center"><span style="font-weight:600;color:${distColor};font-size:12px">${distStr}</span></td>
       <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
       <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
     </tr>`;
@@ -1497,6 +1501,17 @@ function closeModal(e) {
   if (!e || e.target === document.getElementById('modal')) {
     document.getElementById('modal').style.display = 'none';
     if (chartHist) { chartHist.destroy(); chartHist = null; }
+    // Restaurar shared-filter si la vista activa es mapa o lista
+    const activeView = document.querySelector('.view.active')?.id;
+    if (activeView === 'view-map' || activeView === 'view-list') {
+      const sf = document.getElementById('shared-filter');
+      const sc = document.getElementById('shared-calugas');
+      if (sf) sf.style.display = 'flex';
+      if (sc) sc.style.display = 'flex';
+      // Asegurarse de que el panel interno esté visible también
+      const filterPanel = document.getElementById('shared-filter');
+      if (filterPanel) filterPanel.style.display = 'flex';
+    }
   }
 }
 
