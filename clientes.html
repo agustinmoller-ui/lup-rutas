@@ -151,8 +151,9 @@
 
   /* LIST VIEW */
   .list-view-inner { flex: 1; overflow-y: auto; padding: 16px; }
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; overflow-y: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table-wrap th, .table-wrap td { white-space: nowrap; }
   thead { background: var(--surface2); position: sticky; top: 0; z-index: 10; }
   th { padding: 11px 14px; text-align: left; font-weight: 600; color: var(--text2); font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; }
   th:hover { color: var(--text); }
@@ -1227,7 +1228,7 @@ function renderCalugas(clients) {
     chipWide('⏰ '+totalFueraFrecuencia+' ('+pctAlerta+'%)', 'fuera frecuencia', '#eab308') +
     chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
     chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
-    chipWide('🚫 '+visitasSinVenta, 'últ. visita sin venta', '#ef4444') +
+    chipWide('🚫 '+visitasSinVenta+' últ.vis.', 'sin compra', '#ef4444') +
     chipWide('💸 $'+Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K', 'ventas perdidas est.', '#dc2626') +
     chip(clients.length,'Total','#94a3b8');
   
@@ -1296,25 +1297,11 @@ function renderListFromClients(clients) {
   
   // Sort: siempre primero por criticidad (más atrasado primero), luego por ticket DESC como desempate
   const STATUS_PRIORITY = { critical: 0, red: 1, yellow: 2, nodata: 3, green: 4, ok: 5, noseg: 6 };
+  // Sort siempre: estado (prioridad) primero, luego ticket DESC dentro del mismo estado
   clients.sort((a, b) => {
-    if (currentSort.col === 'diasFaltantes' || currentSort.col === 'diasSinContacto') {
-      // Para estado: más atrasado (valor más negativo) primero
-      const va = parseFloat(a.diasFaltantes);
-      const vb = parseFloat(b.diasFaltantes);
-      const aIsNaN = isNaN(va), bIsNaN = isNaN(vb);
-      if (aIsNaN && bIsNaN) return (b.ticketPromedio||0) - (a.ticketPromedio||0);
-      if (aIsNaN) return 1;
-      if (bIsNaN) return -1;
-      if (va !== vb) return va - vb; // más negativo = más atrasado = primero
-      return (b.ticketPromedio||0) - (a.ticketPromedio||0); // desempate por ticket
-    }
-    if (currentSort.col === 'ticketPromedio') {
-      return (b.ticketPromedio||0) - (a.ticketPromedio||0);
-    }
-    // Para otros campos: ordenar por estado crítico + ticket como default
     const sa = STATUS_PRIORITY[getStatusFromDias(a.diasFaltantes, a.enSeguimiento)] ?? 9;
     const sb = STATUS_PRIORITY[getStatusFromDias(b.diasFaltantes, b.enSeguimiento)] ?? 9;
-    if (sa !== sb) return sa - sb;
+    if (sa !== sb) return sa - sb; // más crítico primero
     return (b.ticketPromedio||0) - (a.ticketPromedio||0);
   });
   
@@ -1391,7 +1378,7 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
-            ${c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta||0}v · ${c._diasSinVenta}d s/venta</span>` : ''}
+            ${c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta||0} vis. · ${c._diasSinVenta}d sin compra</span>` : ''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
