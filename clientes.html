@@ -1256,7 +1256,7 @@ function renderCalugas(clients) {
     chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
     chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
     chipWide('🚫 '+visitasSinVenta+' últ.vis.', 'sin compra', '#ef4444') +
-    chipWide('💸 $'+Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K', 'ventas perdidas est.', '#dc2626') +
+    chipWide('💸 $'+(ventasPerdidas>=1000000 ? (ventasPerdidas/1000000).toFixed(1).replace('.',',')+'MM' : Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K'), 'ventas perdidas est.', '#dc2626') +
     chip(clients.length,'Total','#94a3b8');
   
 }
@@ -1405,7 +1405,11 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
-            ${c._diasSinVenta !== null ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta||0} vis. · ${c._diasSinVenta}d sin compra</span>` : ''}
+            ${c._visitasConsecSinVenta === 0 && c._diasSinVenta !== null 
+    ? `<span style="font-size:11px;color:#16a34a">✅ Compró en última visita</span>`
+    : c._visitasConsecSinVenta > 0 
+      ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta} vis. · ${c._diasSinVenta !== null ? c._diasSinVenta+'d' : '—'} sin compra</span>` 
+      : ''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
