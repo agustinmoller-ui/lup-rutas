@@ -349,12 +349,9 @@
     .caluga-num { font-size: 18px; }
     .caluga-label { font-size: 10px; }
     .caluga-sub, .caluga-lost { font-size: 10px; }
-    #main-table { display: none; }
-    #list-cards { display: block; }
     .hist-btn { font-size: 12px; padding: 4px 10px; }
     .link-btn { font-size: 14px; }
     .list-view-inner { padding: 6px 8px; }
-    .table-wrap { display: none; }
 
     /* ALERTAS */
     #alerts-body { padding: 6px 8px; }
@@ -478,7 +475,7 @@
     <div class="calugas-row" id="list-calugas"></div>
     <div class="list-view-inner">
       <!-- Tarjetas para móvil (se muestra con CSS en <700px) -->
-      <div id="list-cards" style="display:none"></div>
+      <div id="list-cards"></div>
       <div class="table-wrap">
         <table id="main-table">
           <thead>
@@ -1195,9 +1192,13 @@ function renderList() {
       </tr>`;
   }).join('');
 
-  // Tarjetas móvil (estilo alert-card, visibles solo en <700px via CSS)
+  // Tarjetas móvil (estilo alert-card)
+  const isMobile = window.innerWidth < 700;
+  const tableWrap = document.querySelector('.table-wrap');
+  if (tableWrap) tableWrap.style.display = isMobile ? 'none' : '';
   const cardsEl = document.getElementById('list-cards');
   if (cardsEl) {
+    cardsEl.style.display = isMobile ? 'block' : 'none';
     cardsEl.innerHTML = clients.map(c => {
       const { st, badgeClass, diasStr, ticketStr, stColor } = clientRowData(c);
       return `<div class="alert-card" style="border-left:3px solid ${stColor}">
