@@ -412,7 +412,14 @@
 <div class="main">
 
   <!-- ===== FILTRO COMPARTIDO (Mapa + Lista) ===== -->
-  <div id="shared-filter" style="background:var(--surface);border-bottom:1px solid var(--border);padding:5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+  <!-- Botón colapsar filtros -->
+  <div style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+    <div id="filter-toggle-bar" onclick="toggleFilters()" 
+      style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;cursor:pointer;user-select:none">
+      <span style="font-size:11px;font-weight:600;color:var(--text2)">🔍 Filtros</span>
+      <span id="filter-arrow" style="font-size:13px;color:var(--text2);transition:transform 0.2s">▲</span>
+    </div>
+    <div id="shared-filter" style="padding:0 8px 5px 8px;display:flex;flex-direction:column;gap:4px">
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
       style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
@@ -453,6 +460,7 @@
           oninput="document.getElementById('shared-vsv-label').textContent=this.value==0?'Todos':this.value+'v';applySharedFilter()">
       </div>
     </div>
+    </div>
   </div>
   <!-- Calugas compartidas delgadas -->
   <div id="shared-calugas" style="display:flex;gap:5px;padding:5px 8px;overflow-x:auto;flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
@@ -463,11 +471,11 @@
     <div id="map"></div>
     <!-- Botón flotante leyenda -->
     <button onclick="document.getElementById('legend-modal').style.display='flex'"
-      style="position:absolute;bottom:16px;right:10px;z-index:999;
-             background:white;border:2px solid #cbd5e1;border-radius:8px;
-             padding:3px 7px;font-size:11px;cursor:pointer;color:#475569;font-weight:600;
-             box-shadow:0 2px 6px rgba(0,0,0,0.12);display:flex;align-items:center;gap:4px"
-      title="Ver leyenda del mapa"><span style="font-size:13px">🗺️</span>Colores</button>
+      style="position:fixed;bottom:16px;right:10px;z-index:1000;
+             background:white;border:2px solid #94a3b8;border-radius:10px;
+             padding:5px 10px;font-size:12px;cursor:pointer;color:#334155;font-weight:700;
+             box-shadow:0 3px 10px rgba(0,0,0,0.18);display:flex;align-items:center;gap:5px"
+      title="Ver leyenda del mapa"><span style="font-size:14px">🗺️</span>Colores</button>
 
     <!-- Modal leyenda -->
     <div id="legend-modal" onclick="if(event.target===this)this.style.display='none'"
@@ -733,6 +741,15 @@ const STATUS_LABELS = {
 // LOAD DATA
 // ============================================================
 let rutasData = []; // Todos los clientes del borrador de rutas
+
+
+function toggleFilters() {
+  const panel = document.getElementById('shared-filter');
+  const arrow = document.getElementById('filter-arrow');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  arrow.textContent = isOpen ? '▼' : '▲';
+}
 
 async function loadData(force = false) {
   try {
