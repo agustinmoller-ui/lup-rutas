@@ -851,6 +851,16 @@ async function loadFromBackend(forceRefresh = false) {
 // Mantener para compatibilidad — no se usa directamente
 async function fetchSheetGVIZ(sheetName, range) { return []; }
 
+// Normaliza nombre para cruce tolerante a variantes
+function normName(n) {
+  if (!n) return '';
+  return n.toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/, '')   // quitar sufijo (1), (2)
+    .replace(/[^a-záéíóúñü\s]/g, '')   // solo letras y espacios
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function buildAllClientsMap() {
   allClientsMap = {};
 
@@ -1348,7 +1358,14 @@ function openHistorial(codigo) {
   document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
   
   // Visitas del cliente
-  const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
+  // Cruce por nombre normalizado (principal) + fallback a client_code
+  const _targetName = normName(c ? c.nombre : '');
+  const visitas = visitasData.filter(v => {
+    // Intento 1: nombre normalizado
+    if (_targetName && normName(v['client_name']) === _targetName) return true;
+    // Fallback: client_code exacto
+    return (v['client_code'] || v['client_id']) == codigo;
+  })
     .sort((a,b) => {
       const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
       const db = parseDate(b['Fecha Visita'] || b['date']) || new Date(0);
