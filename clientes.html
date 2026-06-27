@@ -789,9 +789,18 @@ async function loadData(force = false) {
       <div style="text-align:center;padding:40px">
         <div style="font-size:48px;margin-bottom:16px">⚠️</div>
         <div style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:8px">Error al cargar datos</div>
-        <div style="color:var(--text2);font-size:13px;max-width:300px">Error: ${e.message}</div>
-        <button onclick="loadData()" style="margin-top:20px;background:#4f6ef7;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px">Reintentar</button>
+        <div style="color:var(--text2);font-size:13px;max-width:300px">${e.message}</div>
+        <button onclick="loadData()" id="retry-btn" style="margin-top:20px;background:#4f6ef7;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px">Reintentar</button>
+        <div id="retry-countdown" style="margin-top:8px;color:var(--text2);font-size:12px">Reintentando automáticamente en <span id="rc-secs">10</span>s...</div>
       </div>`;
+    // Auto-retry en 10s
+    let secs = 10;
+    const rcTimer = setInterval(() => {
+      secs--;
+      const el = document.getElementById('rc-secs');
+      if (el) el.textContent = secs;
+      if (secs <= 0) { clearInterval(rcTimer); loadData(); }
+    }, 1000);
   }
 }
 
@@ -807,31 +816,30 @@ async function refreshData() {
 const API_URL = 'https://lupita-f3e3c640.base44.app/functions/getClientes';
 
 async function loadFromBackend(forceRefresh = false) {
-  // Estrategia: 1) Intentar GET (cache en servidor), 2) Si falla, POST con token fresco
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000); // timeout 3s
+  // Estrategia: GET con retry — 2 intentos, timeout 8s cada uno
+  const TIMEOUT = 8000;
+  const RETRIES = 2;
 
-  try {
-    // Paso 1: intentar GET (debería servir desde cache)
-    const url = forceRefresh ? API_URL + '?force=true' : API_URL;
-    const resp = await fetch(url, { 
-      method: 'GET',
-      signal: controller.signal 
-    });
-    clearTimeout(timeoutId);
-    
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.ok || data.stale) return data; // OK o stale es aceptable
+  for (let attempt = 1; attempt <= RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+    try {
+      const url = forceRefresh || attempt > 1 ? API_URL + '?force=true&t=' + Date.now() : API_URL;
+      const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.ok || data.stale) return data;
+      }
+    } catch (e) {
+      clearTimeout(timeoutId);
+      if (attempt < RETRIES) {
+        console.warn('[LUP] intento ' + attempt + ' fallido, reintentando...');
+        await new Promise(r => setTimeout(r, 1500)); // esperar 1.5s antes de retry
+      }
     }
-  } catch (e) {
-    // timeout o error de GET — seguir a paso 2
-    clearTimeout(timeoutId);
   }
-
-  // Paso 2: GET falló — obtener token fresco e intentar POST
-  console.log('[DEBUG] GET falló, intentando POST con token fresco...');
-  throw new Error('API Cache no disponible — abrir en navegador web para usar Google Sign-In');
+  throw new Error('No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.');
 }
 
 // Mantener para compatibilidad — no se usa directamente
@@ -1432,11 +1440,30 @@ function renderAlerts() {
     html += '<div style="height:20px"></div>';
   }
 
-  // Cat 3: Nunca han comprado (fecha 1899 o sin compra) — ordenado por nombre
+  // Filtro sin venta: visitas consecutivas sin compra
+  const sinVentaThreshold = parseInt(document.getElementById('alert-visitas-sin-venta')?.value) || 3;
+
+  // Cat 3: Sin venta en últimas N visitas
+  const sinVentaN = clients.filter(c => {
+    const visCliente = (visitasData || [])
+      .filter(v => (v['client_code'] || v['client_id']) == c.codigo)
+      .sort((a, b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))
+      .slice(0, sinVentaThreshold);
+    if (visCliente.length < sinVentaThreshold) return false;
+    return visCliente.every(v => (v['Visita/Venta'] || '') !== 'Venta');
+  }).sort((a, b) => (b.ticketPromedio || 0) - (a.ticketPromedio || 0));
+
+  // Cat 4: Nunca han comprado (fecha 1899 o sin compra) — ordenado por nombre
   const nuncaCompro = clients.filter(c => {
     const uc = c.ultimaCompra || '';
     return !uc || uc.includes('1899') || uc === '';
   }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  if (sinVentaN.length) {
+    html += `<div class="section-title">🔁 Sin venta en últimas ${sinVentaThreshold} visitas <span class="section-badge">${sinVentaN.length}</span></div>`;
+    html += tabla(sinVentaN, c => sinVentaThreshold + ' visitas sin venta');
+    html += '<div style="height:20px"></div>';
+  }
 
   if (nuncaCompro.length) {
     html += `<div class="section-title">🛒 Sin compras registradas <span class="section-badge">${nuncaCompro.length}</span></div>`;
