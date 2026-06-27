@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
 <title>LUP — Clientes v39</title><!-- build:20260627_214440 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,7 +31,7 @@
     --shadow: 0 2px 12px rgba(0,0,0,0.08);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); height: 100dvh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100%; }
 
   /* NAV */
   nav {
@@ -468,7 +468,7 @@
   <!-- ===== MAP VIEW ===== -->
   <!-- ===== MAP VIEW ===== -->
   <div class="view active" id="view-map" style="position:relative;">
-    <div id="map"></div>
+    <div id="map" style="width:100%;height:100%;"></div>
     <!-- Botón flotante leyenda -->
     <button onclick="document.getElementById('legend-modal').style.display='flex'"
       style="position:fixed;bottom:16px;right:10px;z-index:1000;
@@ -687,32 +687,6 @@
 // CONFIG
 // ============================================================
 
-// DEBUG: interceptar ocultamiento de filtros
-window.__debugFilterHide = true;
-const __origGetEl = document.getElementById.bind(document);
-
-// MutationObserver para capturar cambios de display en shared-filter
-document.addEventListener('DOMContentLoaded', function() {
-  const target = document.getElementById('shared-filter');
-  if (!target) return;
-  const obs = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      if (m.attributeName === 'style') {
-        const disp = target.style.display;
-        if (disp === 'none') {
-          console.error('🚨 shared-filter OCULTO', new Error().stack);
-          // Mostrar toast en pantalla
-          const t = document.createElement('div');
-          t.style.cssText = 'position:fixed;top:60px;left:10px;right:10px;background:#ef4444;color:white;padding:10px;border-radius:8px;font-size:11px;z-index:99999;word-break:break-all';
-          t.textContent = '🚨 HIDE: ' + new Error().stack.split('\n').slice(1,4).join(' | ');
-          document.body.appendChild(t);
-          setTimeout(() => t.remove(), 8000);
-        }
-      }
-    });
-  });
-  obs.observe(target, { attributes: true });
-});
 
 const SHEET_ID = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
 const META_DIARIA = 2000000; // meta por día hábil
