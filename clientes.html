@@ -413,8 +413,8 @@
 
   <!-- ===== MAP VIEW ===== -->
   <div class="view active" id="view-map" style="position:relative;">
-    <div class="filter-bar">
-      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:6px">
+      <input type="text" id="map-search" placeholder="🔍 Buscar cliente..." oninput="filterMap()" style="flex:1 1 100%">
       <select id="map-comuna" onchange="filterMap()"><option value="">Todas las comunas</option></select>
       <select id="map-status" onchange="filterMap()">
         <option value="">Todos los estados</option>
@@ -424,16 +424,34 @@
         <option value="red">🔴 Rojo (-6 a -10)</option>
         <option value="critical">⚫ Crítico (&lt;-10)</option>
         <option value="nodata">⚪ Sin datos</option>
-        <option value="noseg">🔘 Sin seguimiento</option>
       </select>
       <select id="map-vendedor" onchange="filterMap()"><option value="">Todos los vendedores</option></select>
-      <div class="switch-wrap">
-        <span class="switch-label">Solo seguimiento</span>
-        <label class="switch">
-          <input type="checkbox" id="switch-seguimiento" checked onchange="toggleTodos(this)">
-          <span class="slider"></span>
-        </label>
-        <span class="switch-label">Todos</span>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Ticket mín.</span>
+          <span id="map-ticket-label" style="font-weight:600;font-size:12px;color:var(--text)">$ Todos</span>
+        </div>
+        <input type="range" id="map-ticket-slider" min="0" max="200000" step="5000" value="0"
+          style="width:100%;accent-color:#3b82f6;cursor:pointer"
+          oninput="document.getElementById('map-ticket-label').textContent=this.value==0?'$ Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+'" onchange="filterMap()">
+      </div>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Sin visita mín.</span>
+          <span id="map-dias-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        </div>
+        <input type="range" id="map-dias-slider" min="0" max="90" step="1" value="0"
+          style="width:100%;accent-color:#ef4444;cursor:pointer"
+          oninput="document.getElementById('map-dias-label').textContent=this.value==0?'Todos':this.value+'+ días'" onchange="filterMap()">
+      </div>
+      <div class="slider-wrap" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;flex:1;min-width:130px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <span style="color:var(--text2);font-size:11px">Sin venta en</span>
+          <span id="map-vsv-label" style="font-weight:600;font-size:12px;color:var(--text)">Todos</span>
+        </div>
+        <input type="range" id="map-vsv-slider" min="0" max="10" step="1" value="0"
+          style="width:100%;accent-color:#eab308;cursor:pointer"
+          oninput="document.getElementById('map-vsv-label').textContent=this.value==0?'Todos':this.value+' visitas'" onchange="filterMap()">
       </div>
     </div>
     <div id="map"></div>
@@ -664,7 +682,7 @@ let visitasData = [];       // Todas las visitas
 let allClientsMap = {};     // Mapa de todos los clientes únicos desde Visitas
 let map = null;
 let markers = [];
-let currentSort = { col: 'diasFaltantes', asc: true };
+let currentSort = { col: 'diasFaltantes', asc: false }; // siempre crítico primero
 let chartVentas = null, chartClientes = null, chartHist = null;
 let ROLE = 'admin'; // 'admin' | 'vendedor'
 
@@ -749,6 +767,8 @@ async function loadData(force = false) {
     const maxSlider = Math.ceil(maxTick / 10000) * 10000;
     const sliderEl = document.getElementById('list-ticket-slider');
     if (sliderEl && maxTick > 0) sliderEl.max = maxSlider;
+    const mapSliderEl = document.getElementById('map-ticket-slider');
+    if (mapSliderEl && maxTick > 0) mapSliderEl.max = maxSlider;
     renderList();
     renderDashboard();
     renderAdmin();
@@ -1029,14 +1049,36 @@ function renderMapMarkers() {
   const vendedor = document.getElementById('map-vendedor').value;
   const soloSeg = true; // solo seguimiento
   
+  const mapMinTicket = parseInt(document.getElementById('map-ticket-slider')?.value) || 0;
+  const mapMinDias   = parseInt(document.getElementById('map-dias-slider')?.value) || 0;
+  const mapMinVSV    = parseInt(document.getElementById('map-vsv-slider')?.value) || 0;
+
+  // Pre-calcular set sin venta si slider activo
+  let mapSinVentaSet = null;
+  if (mapMinVSV > 0) {
+    mapSinVentaSet = new Set();
+    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
+      const vis = (visitasData || [])
+        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
+        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))
+        .slice(0, mapMinVSV);
+      if (vis.length >= mapMinVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
+        mapSinVentaSet.add(c.codigo);
+      }
+    });
+  }
+
   const clients = Object.values(allClientsMap).filter(c => {
     if (!c.lat || !c.lng) return false;
-    if (soloSeg && !c.enSeguimiento) return false;
+    if (!c.enSeguimiento) return false;
     if (search && !c.nombre.toLowerCase().includes(search) && !c.codigo.toLowerCase().includes(search)) return false;
     if (comuna && c.comuna !== comuna) return false;
     if (vendedor && c.vendedor !== vendedor) return false;
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     if (status && st !== status) return false;
+    if (mapMinTicket > 0 && (c.ticketPromedio||0) < mapMinTicket) return false;
+    if (mapMinDias > 0 && (parseFloat(c.diasSinContacto)||0) < mapMinDias) return false;
+    if (mapSinVentaSet !== null && !mapSinVentaSet.has(c.codigo)) return false;
     return true;
   });
   
@@ -1162,19 +1204,28 @@ function sortList(col) {
 function renderList() {
   let clients = getFilteredClients('list');
   
-  // Sort
+  // Sort: siempre primero por criticidad (más atrasado primero), luego por ticket DESC como desempate
+  const STATUS_PRIORITY = { critical: 0, red: 1, yellow: 2, nodata: 3, green: 4, ok: 5, noseg: 6 };
   clients.sort((a, b) => {
-    let va = a[currentSort.col], vb = b[currentSort.col];
-    if (currentSort.col === 'diasFaltantes' || currentSort.col === 'diasSinContacto' || currentSort.col === 'ticketPromedio') {
-      va = parseFloat(va) || -Infinity;
-      vb = parseFloat(vb) || -Infinity;
-    } else {
-      va = String(va || '').toLowerCase();
-      vb = String(vb || '').toLowerCase();
+    if (currentSort.col === 'diasFaltantes' || currentSort.col === 'diasSinContacto') {
+      // Para estado: más atrasado (valor más negativo) primero
+      const va = parseFloat(a.diasFaltantes);
+      const vb = parseFloat(b.diasFaltantes);
+      const aIsNaN = isNaN(va), bIsNaN = isNaN(vb);
+      if (aIsNaN && bIsNaN) return (b.ticketPromedio||0) - (a.ticketPromedio||0);
+      if (aIsNaN) return 1;
+      if (bIsNaN) return -1;
+      if (va !== vb) return va - vb; // más negativo = más atrasado = primero
+      return (b.ticketPromedio||0) - (a.ticketPromedio||0); // desempate por ticket
     }
-    if (va < vb) return currentSort.asc ? -1 : 1;
-    if (va > vb) return currentSort.asc ? 1 : -1;
-    return 0;
+    if (currentSort.col === 'ticketPromedio') {
+      return (b.ticketPromedio||0) - (a.ticketPromedio||0);
+    }
+    // Para otros campos: ordenar por estado crítico + ticket como default
+    const sa = STATUS_PRIORITY[getStatusFromDias(a.diasFaltantes, a.enSeguimiento)] ?? 9;
+    const sb = STATUS_PRIORITY[getStatusFromDias(b.diasFaltantes, b.enSeguimiento)] ?? 9;
+    if (sa !== sb) return sa - sb;
+    return (b.ticketPromedio||0) - (a.ticketPromedio||0);
   });
   
   // Calugas
