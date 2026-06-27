@@ -653,7 +653,7 @@
 // CONFIG
 // ============================================================
 const SHEET_ID = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
-const META_MENSUAL = 2000000;
+const META_DIARIA = 2000000; // meta por día hábil
 let mostrarTodos = false; // switch: seguimiento vs todos
 
 // ============================================================
@@ -1532,10 +1532,11 @@ function renderDashboard() {
   const diasHabilesTotalesMes = contarDiasHabilesTotalesMes(hoy.getFullYear(), hoy.getMonth());
   const diasHabilesRestantes = diasHabilesTotalesMes - diasHabilesTranscurridos;
 
-  // Meta proporcional al período transcurrido
-  const metaDia = META_MENSUAL / diasHabilesTotalesMes; // meta por día hábil
-  const metaSemana = metaDia * 5; // meta 5 días hábiles
-  const metaMesTranscurrido = metaDia * diasHabilesTranscurridos; // meta acumulada hasta hoy
+  // Meta basada en META_DIARIA = $2.000.000 por día hábil
+  const metaDia = META_DIARIA;
+  const metaSemana = META_DIARIA * 5;
+  const metaMes = META_DIARIA * diasHabilesTotalesMes; // meta total del mes
+  const metaMesTranscurrido = META_DIARIA * diasHabilesTranscurridos; // meta acumulada hasta hoy
   const proyeccion = diasHabilesTranscurridos > 0
     ? Math.round(totalMes / diasHabilesTranscurridos * diasHabilesTotalesMes)
     : 0;
@@ -1589,9 +1590,9 @@ function renderDashboard() {
     <div class="dash-caluga">
       <div class="dash-caluga-label">Proyección mes</div>
       <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
-      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${META_MENSUAL.toLocaleString('es-CL')}</div>
-      ${metaStr(proyeccion, META_MENSUAL)}
-      ${bar(proyeccion, META_MENSUAL)}
+      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${metaMes.toLocaleString('es-CL')}</div>
+      ${metaStr(proyeccion, metaMes)}
+      ${bar(proyeccion, metaMes)}
     </div>
   `;
 
