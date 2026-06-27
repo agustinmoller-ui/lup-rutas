@@ -407,6 +407,11 @@
   });
 })();
 </script>
+  <!-- Excel export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -552,6 +557,18 @@
   <div class="view" id="view-list">
     <div class="list-view-inner">
       <div id="list-cards"></div>
+      <!-- Barra de exportación -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <span id="list-count-label" style="font-size:12px;color:var(--text2)">— clientes</span>
+        <div style="display:flex;gap:6px">
+          <button onclick="exportExcel()" style="display:flex;align-items:center;gap:4px;background:#16a34a;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">
+            📊 Excel
+          </button>
+          <button onclick="exportPDF()" style="display:flex;align-items:center;gap:4px;background:#dc2626;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">
+            📄 PDF
+          </button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table id="main-table">
           <thead>
@@ -562,6 +579,7 @@
               <th onclick="sortList('diasSinContacto')">Días ↕</th>
               <th onclick="sortList('frecuenciaIdeal')">Frec. ↕</th>
               <th onclick="sortList('ticketPromedio')">Ticket ↕</th>
+              <th>📍</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -1366,6 +1384,7 @@ function renderListFromClients(clients) {
   }
 
   // Tabla desktop
+  window._lastFilteredClients = clients; // para exportar
   tbody.innerHTML = clients.map(c => {
     const { st, badgeClass, diasStr, ticketStr, nuncaCompro } = clientRowData(c);
     const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
@@ -1385,6 +1404,10 @@ function renderListFromClients(clients) {
         </td>
       </tr>`;
   }).join('');
+
+  // Actualizar contador de lista
+  const countLbl = document.getElementById('list-count-label');
+  if (countLbl) countLbl.textContent = clients.length + ' cliente' + (clients.length !== 1 ? 's' : '') + ' mostrados';
 
   // Tarjetas móvil (estilo alert-card)
   const isMobile = window.innerWidth < 700;
@@ -2025,6 +2048,203 @@ setInterval(() => {
     refreshBtn.title = `Próximo refresco: ${min}:${sec}`;
   }
 }, 1000);
+
+// =============================================
+// EXPORTACIÓN EXCEL
+// =============================================
+function exportExcel() {
+  const clients = getFilteredClients();
+  const f = getSharedFilters();
+  const now = new Date();
+  const fechaStr = now.toLocaleDateString('es-CL') + ' ' + now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+  
+  // Filtros activos como texto
+  const filtrosActivos = [];
+  if (f.search) filtrosActivos.push('Búsqueda: ' + f.search);
+  if (f.comuna) filtrosActivos.push('Comuna: ' + f.comuna);
+  if (f.status) filtrosActivos.push('Estado: ' + f.status);
+  if (f.vendedor) filtrosActivos.push('Vendedor: ' + f.vendedor);
+  if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
+  if (f.maxDias < 999) filtrosActivos.push('Días máx: ' + f.maxDias);
+  if (f.minSinVenta > 0) filtrosActivos.push('Sin venta ≥: ' + f.minSinVenta);
+  
+  const filtrosStr = filtrosActivos.length ? filtrosActivos.join(' | ') : 'Sin filtros';
+
+  const STATUS_LABEL_MAP = { ok:'OK', green:'Verde', yellow:'Amarillo', red:'Rojo', critical:'Crítico', nodata:'Sin datos' };
+
+  // Datos de la tabla
+  const rows = clients.map(c => {
+    const st = calcStatus(c.diasFaltantes, c.enSeguimiento);
+    const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
+    return [
+      c.nombre || '',
+      c.direccion || '',
+      c.comuna || '',
+      c.vendedor || '',
+      STATUS_LABEL_MAP[st] || '',
+      c.diasSinContacto || '',
+      c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '',
+      c.diasFaltantes !== null && c.diasFaltantes !== undefined ? c.diasFaltantes : '',
+      c.ultimaVisita || '',
+      c._diasSinVenta !== null && c._diasSinVenta !== undefined ? c._diasSinVenta : '',
+      c.ticketPromedio ? Math.round(c.ticketPromedio) : 0,
+      c._visitasConsecSinVenta || 0,
+      mapsUrl
+    ];
+  });
+
+  const wsData = [
+    ['LUP — Reporte de Clientes'],
+    ['Fecha de generación:', fechaStr],
+    ['Filtros aplicados:', filtrosStr],
+    ['Total clientes:', clients.length],
+    [],
+    ['Nombre', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin compra', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
+    ...rows
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Ancho de columnas
+  ws['!cols'] = [
+    {wch:35},{wch:30},{wch:18},{wch:18},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14},{wch:13},{wch:14},{wch:12},{wch:50}
+  ];
+
+  // Título en negrita (merge A1)
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:12}}];
+  if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
+
+  // Encabezados en negrita (fila 6 = index 5)
+  ['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6','M6'].forEach(ref => {
+    if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
+  });
+
+  // Hipervínculos Maps (fila 7 en adelante, columna M = index 12)
+  rows.forEach((row, i) => {
+    if (row[12]) {
+      const cellRef = XLSX.utils.encode_cell({r: 6 + i, c: 12});
+      if (ws[cellRef]) {
+        ws[cellRef].l = { Target: row[12], Tooltip: 'Ver en Maps' };
+        ws[cellRef].v = '📍 Ver en Maps';
+      }
+    }
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Clientes LUP');
+  const fileName = 'LUP_Clientes_' + now.toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, fileName);
+}
+
+// =============================================
+// EXPORTACIÓN PDF
+// =============================================
+function exportPDF() {
+  const clients = getFilteredClients();
+  const f = getSharedFilters();
+  const now = new Date();
+  const fechaStr = now.toLocaleDateString('es-CL') + ' ' + now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
+  
+  const filtrosActivos = [];
+  if (f.search) filtrosActivos.push('Búsqueda: ' + f.search);
+  if (f.comuna) filtrosActivos.push('Comuna: ' + f.comuna);
+  if (f.status) filtrosActivos.push('Estado: ' + f.status);
+  if (f.vendedor) filtrosActivos.push('Vendedor: ' + f.vendedor);
+  if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
+  if (f.maxDias < 999) filtrosActivos.push('Días máx: ' + f.maxDias);
+  if (f.minSinVenta > 0) filtrosActivos.push('Sin venta ≥: ' + f.minSinVenta);
+  const filtrosStr = filtrosActivos.length ? filtrosActivos.join(' | ') : 'Sin filtros';
+
+  const STATUS_LABEL_MAP = { ok:'OK', green:'Verde', yellow:'Amarillo', red:'Rojo', critical:'Crítico', nodata:'Sin datos' };
+  const STATUS_COLOR_MAP = { ok:'#3b82f6', green:'#16a34a', yellow:'#ca8a04', red:'#dc2626', critical:'#991b1b', nodata:'#94a3b8' };
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  // Encabezado
+  doc.setFontSize(16);
+  doc.setTextColor(79, 110, 247);
+  doc.text('LUP — Reporte de Clientes', 14, 14);
+
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Generado: ' + fechaStr + '  |  Total: ' + clients.length + ' clientes', 14, 21);
+  if (filtrosStr !== 'Sin filtros') {
+    doc.text('Filtros: ' + filtrosStr, 14, 27);
+  }
+
+  const startY = filtrosStr !== 'Sin filtros' ? 32 : 26;
+
+  const tableRows = clients.map(c => {
+    const st = calcStatus(c.diasFaltantes, c.enSeguimiento);
+    const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
+    return [
+      c.nombre || '—',
+      c.comuna || '—',
+      c.vendedor || '—',
+      STATUS_LABEL_MAP[st] || '—',
+      c.ultimaVisita || '—',
+      c.diasSinContacto || '—',
+      c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—',
+      c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—',
+      mapsUrl ? '📍 Maps' : '—'
+    ];
+  });
+
+  doc.autoTable({
+    startY: startY,
+    head: [['Nombre', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/c', 'Frec.', 'Ticket', '📍']],
+    body: tableRows,
+    styles: { fontSize: 7.5, cellPadding: 2, overflow: 'ellipsize' },
+    headStyles: { fillColor: [79, 110, 247], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    columnStyles: {
+      0: { cellWidth: 55 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 20 },
+      4: { cellWidth: 24 },
+      5: { cellWidth: 16 },
+      6: { cellWidth: 14 },
+      7: { cellWidth: 24 },
+      8: { cellWidth: 18 }
+    },
+    didParseCell: function(data) {
+      if (data.section === 'body' && data.column.index === 3) {
+        const stLabel = data.cell.raw;
+        const stKey = Object.keys(STATUS_LABEL_MAP).find(k => STATUS_LABEL_MAP[k] === stLabel);
+        if (stKey) data.cell.styles.textColor = STATUS_COLOR_MAP[stKey];
+      }
+    },
+    didDrawCell: function(data) {
+      // Hipervínculo en columna Maps
+      if (data.section === 'body' && data.column.index === 8 && data.cell.raw === '📍 Maps') {
+        const c = clients[data.row.index];
+        if (c && c.lat && c.lng) {
+          const url = `https://www.google.com/maps?q=${c.lat},${c.lng}`;
+          doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
+        }
+      }
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    margin: { left: 14, right: 14 }
+  });
+
+  // Footer
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(150);
+    doc.text('LUP App · Generado ' + fechaStr + ' · Pág ' + i + ' de ' + pageCount,
+      doc.internal.pageSize.getWidth() / 2, doc.internal.pageSize.getHeight() - 5, { align: 'center' });
+  }
+
+  doc.save('LUP_Clientes_' + now.toISOString().slice(0,10) + '.pdf');
+}
+
+function getFilteredClients() {
+  return window._lastFilteredClients || Object.values(allClientsMap).filter(c => c.enSeguimiento);
+}
 </script>
 </body>
 </html>
