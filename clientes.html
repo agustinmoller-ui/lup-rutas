@@ -65,12 +65,12 @@
   /* FILTER BAR */
   .filter-bar {
     background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 10px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 6px 10px; display: flex; gap: 5px; align-items: center; flex-wrap: wrap;
     flex-shrink: 0;
   }
   .filter-bar input, .filter-bar select {
     background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;
+    padding: 5px 9px; border-radius: var(--radius-sm); font-size: 12px; font-family: inherit;
     outline: none; transition: border-color 0.2s;
   }
   .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
@@ -303,23 +303,23 @@
     .filter-bar {
       flex-direction: row;
       flex-wrap: wrap;
-      gap: 4px;
-      padding: 6px 8px;
+      gap: 3px;
+      padding: 5px 6px;
     }
     .filter-bar input,
     .filter-bar select,
     .filter-bar .slider-wrap {
-      flex: 1 1 calc(50% - 4px);
+      flex: 1 1 calc(50% - 3px);
       min-width: 0;
       max-width: 100%;
       box-sizing: border-box;
-      font-size: 13px;
-      padding: 5px 8px;
+      font-size: 12px;
+      padding: 4px 7px;
       height: auto;
-      border-radius: 8px;
+      border-radius: 7px;
     }
     .filter-bar .slider-wrap {
-      padding: 5px 10px;
+      padding: 4px 8px;
     }
     .filter-bar input[type="text"] {
       flex: 1 1 100%;
@@ -657,7 +657,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Fecha</th><th>Tipo</th><th>Vendedor</th><th>Monto</th><th>Distancia</th>
+            <th>Fecha</th><th>Días desde ant.</th><th>Tipo</th><th>Vendedor</th><th>Monto</th>
           </tr></thead>
           <tbody id="modal-hist-body"></tbody>
         </table>
@@ -1254,6 +1254,16 @@ function renderList() {
     ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
     : 0;
   const pctAlerta = clients.length ? Math.round(((counts.yellow+counts.red+counts.critical)/clients.length)*100) : 0;
+  // Visitas sin venta: contar clientes donde la última visita NO fue venta
+  let visitasSinVenta = 0;
+  if (visitasData && visitasData.length) {
+    clients.forEach(c => {
+      const ultVis = (visitasData)
+        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
+        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))[0];
+      if (ultVis && (ultVis['Visita/Venta']||'') !== 'Venta') visitasSinVenta++;
+    });
+  }
 
   const calugas = document.getElementById('list-calugas');
   calugas.innerHTML = `
@@ -1282,6 +1292,11 @@ function renderList() {
       <div class="caluga-label">💸 Ventas est. perdidas</div>
       <div class="caluga-lost" style="color:#ef4444;font-size:18px;font-weight:700;margin-top:4px">$${Math.round(ventasPerdidas).toLocaleString('es-CL')}</div>
       <div class="caluga-sub">${totalFueraFrecuencia} clientes atrasados</div>
+    </div>
+    <div class="caluga" style="border-left:3px solid #eab308;min-width:120px">
+      <div class="caluga-num" style="color:#eab308;font-size:22px">${visitasSinVenta}</div>
+      <div class="caluga-label">🚫 Últ. visita sin venta</div>
+      <div class="caluga-sub">${clients.length ? Math.round(visitasSinVenta/clients.length*100) : 0}% del total</div>
     </div>
     <div class="caluga" style="min-width:80px;border-left:2px solid var(--border)">
       <div class="caluga-num" style="color:var(--text);font-size:18px">${clients.length}</div>
@@ -1419,17 +1434,33 @@ function openHistorial(codigo) {
   
   // Tabla
   const tbody = document.getElementById('modal-hist-body');
-  tbody.innerHTML = visitas.slice(0, 50).map(v => {
+  // visitas ya viene ordenado desc por fecha; para calcular gap comparamos con la siguiente (más antigua)
+  const visitasSlice = visitas.slice(0, 50);
+  tbody.innerHTML = visitasSlice.map((v, i) => {
     const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
     const tipo = v['Visita/Venta'] || 'Visita';
     const color = tipo === 'Venta' ? '#16a34a' : '#9ca3af';
-    return `<tr>
-      <td>${v['Fecha Visita'] || '—'}</td>
-      <td><span style="color:${color};font-weight:600">${tipo}</span></td>
-      <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
-      <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
-      <td>${v['Distancia'] ? v['Distancia'] + ' km' : '—'}</td>
-    </tr>`;
+    // Calcular días desde visita anterior (i+1 es la visita anterior porque está ordenado desc)
+    let diasGap = '—';
+    let gapColor = '#64748b';
+    const fechaActual = new Date(v['Fecha Visita'] || 0);
+    const siguiente = visitasSlice[i + 1];
+    if (siguiente && fechaActual > 0) {
+      const fechaAnterior = new Date(siguiente['Fecha Visita'] || 0);
+      if (fechaAnterior > 0 && fechaActual > fechaAnterior) {
+        const diff = Math.round((fechaActual - fechaAnterior) / (1000*60*60*24));
+        diasGap = diff + 'd';
+        // Color según urgencia: verde <14, amarillo 14-21, rojo >21
+        gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
+      }
+    }
+    return \`<tr>
+      <td style="white-space:nowrap">\${v['Fecha Visita'] || '—'}</td>
+      <td style="text-align:center"><span style="font-weight:700;color:\${gapColor};font-size:13px">\${diasGap}</span></td>
+      <td><span style="color:\${color};font-weight:600">\${tipo}</span></td>
+      <td style="font-size:12px">\${v['salesman_name'] || '—'}</td>
+      <td>\${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+    </tr>\`;
   }).join('');
   
   document.getElementById('modal').style.display = 'flex';
