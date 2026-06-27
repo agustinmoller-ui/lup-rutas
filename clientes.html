@@ -431,6 +431,7 @@
         <option value="yellow">🟡 Amarillo</option>
         <option value="red">🔴 Rojo</option>
         <option value="critical">⚫ Crítico</option>
+        <option value="nodata">⚪ Sin datos</option>
       </select>
       <select id="shared-vendedor" onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none"><option value="">Vendedor</option></select>
     </div>
@@ -440,7 +441,7 @@
           <span>💵 Ticket</span><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span id="shared-ticket-label" style="font-weight:700;color:var(--text)">Todos</span><span onclick="alert('Filtra por ticket promedio histórico.\nEjemplo: $50K+ = solo clientes que compran $50.000 o más.')" style="cursor:pointer;opacity:0.5;font-size:9px">❓</span>
         </div>
         <input type="range" id="shared-ticket-slider" min="0" max="200000" step="5000" value="0"
-          style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer"
+          style="width:100%;height:3px;accent-color:#3b82f6;cursor:pointer;margin-top:8px"
           oninput="document.getElementById('shared-ticket-label').textContent=this.value==0?'Todos':'$'+parseInt(this.value).toLocaleString('es-CL')+'+';applySharedFilter()">
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
@@ -448,7 +449,7 @@
           <span style="white-space:nowrap">📅 Días</span><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span id="shared-dias-label" style="font-weight:700;color:var(--text)">Todos</span><span onclick="alert('Días sin visita.\n30d+ = llevan 30+ días sin ser visitados.\nTiempo absoluto, no frecuencia ideal.')" style="cursor:pointer;opacity:0.5;font-size:9px">❓</span>
         </div>
         <input type="range" id="shared-dias-slider" min="0" max="90" step="1" value="0"
-          style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer"
+          style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer;margin-top:8px"
           oninput="document.getElementById('shared-dias-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilter()">
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
@@ -456,7 +457,7 @@
           <span style="white-space:nowrap">🚫 S/venta</span><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span id="shared-vsv-label" style="font-weight:700;color:var(--text)">Todos</span><span onclick="alert('Últimas N visitas sin venta.\nEjemplo: 3 = las 3 últimas visitas no generaron compra.\nDetecta clientes difíciles.')" style="cursor:pointer;opacity:0.5;font-size:9px">❓</span>
         </div>
         <input type="range" id="shared-vsv-slider" min="0" max="10" step="1" value="0"
-          style="width:100%;height:3px;accent-color:#eab308;cursor:pointer"
+          style="width:100%;height:3px;accent-color:#eab308;cursor:pointer;margin-top:8px"
           oninput="document.getElementById('shared-vsv-label').textContent=this.value==0?'Todos':this.value+'v';applySharedFilter()">
       </div>
     </div>
