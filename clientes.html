@@ -1218,9 +1218,1923 @@ function renderListFromClients(clients) {
     }
   });
   
-  // Ventas est. perdidas = suma de tickets de clientes fuera de frecuencia
-  // Representa lo que habrían comprado si hubieran sido visitados a tiempo
-  const ventasPerdidas = ticketSumFuera;
+  renderCalugas(clients);
+
+  // Table
+  const tbody = document.getElementById('list-body');
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
+    return;
+  }
+  
+  // Helper compartido para datos de fila
+  function clientRowData(c) {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
+    const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
+    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : null;
+    const nuncaCompro = !c.ultimaCompra || c.ultimaCompra === '' || c.ultimaCompra.includes('1899');
+    const COLORS = {ok:'#3b82f6',green:'#22c55e',yellow:'#eab308',red:'#ef4444',critical:'#7f1d1d',nodata:'#94a3b8',noseg:'#94a3b8'};
+    return { st, badgeClass, diasStr, ticketStr, nuncaCompro, stColor: COLORS[st] || '#94a3b8' };
+  }
+
+  // Tabla desktop
+  tbody.innerHTML = clients.map(c => {
+    const { st, badgeClass, diasStr, ticketStr, nuncaCompro } = clientRowData(c);
+    const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
+    return `
+      <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
+        <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
+        <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
+        <td>${c.ultimaVisita || '—'}</td>
+        <td style="text-align:center">${c.diasSinContacto || '—'}</td>
+        <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td>${tStr}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
+            <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Tarjetas móvil (estilo alert-card)
+  const isMobile = window.innerWidth < 700;
+  const tableWrap = document.querySelector('.table-wrap');
+  if (tableWrap) tableWrap.style.display = isMobile ? 'none' : '';
+  const cardsEl = document.getElementById('list-cards');
+  if (cardsEl) {
+    cardsEl.style.display = isMobile ? 'block' : 'none';
+    cardsEl.innerHTML = clients.map(c => {
+      const { st, badgeClass, diasStr, ticketStr, stColor } = clientRowData(c);
+      return `<div class="alert-card" style="border-left:3px solid ${stColor}">
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'}</div>
+          <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
+            <span class="${badgeClass}" style="font-size:11px">${diasStr} ${STATUS_LABELS[st]}</span>
+            <span style="font-size:11px;color:var(--text2)">📅 ${c.ultimaVisita || 'Sin visita'}</span>
+            <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
+            ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
+            ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+          ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
+          <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// HISTORIAL MODAL
+// ============================================================
+function renderList() {
+  applySharedFilter();
+}
+
+function openHistorial(codigo) {
+  const c = allClientsMap[codigo];
+  if (!c) return;
+  
+  document.getElementById('modal-name').textContent = c.nombre;
+  document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
+  
+  // Visitas del cliente
+  const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
+    .sort((a,b) => {
+      const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
+      const db = parseDate(b['Fecha Visita'] || b['date']) || new Date(0);
+      return db - da;
+    });
+  
+  const ventas = visitas.filter(v => v['Visita/Venta'] === 'Venta');
+  const totalVentas = ventas.reduce((s, v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const ticketProm = ventas.length ? totalVentas / ventas.length : 0;
+  
+  document.getElementById('modal-stats').innerHTML = `
+    <div class="modal-stat"><div class="modal-stat-val">${visitas.length}</div><div class="modal-stat-lbl">Total visitas</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${ventas.length}</div><div class="modal-stat-lbl">Compras</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(ticketProm).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Ticket promedio</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
+  `;
+  
+  // Chart historial
+  const last30 = visitas.slice(0, 30).reverse();
+  const labels = last30.map(v => v['Fecha Visita'] || '');
+  const montos = last30.map(v => v['Visita/Venta'] === 'Venta' ? (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0) : 0);
+  
+  if (chartHist) chartHist.destroy();
+  const ctx = document.getElementById('chart-hist').getContext('2d');
+  chartHist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Venta neta',
+        data: montos,
+        backgroundColor: '#4f6ef7',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#6b7280', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#e5e7eb' } }
+      }
+    }
+  });
+  
+  // Tabla
+  const tbody = document.getElementById('modal-hist-body');
+  // visitas ya viene ordenado desc por fecha; para calcular gap comparamos con la siguiente (más antigua)
+  const visitasSlice = visitas.slice(0, 50);
+  tbody.innerHTML = visitasSlice.map((v, i) => {
+    const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
+    const tipo = v['Visita/Venta'] || 'Visita';
+    const color = tipo === 'Venta' ? '#16a34a' : '#9ca3af';
+    // Calcular días desde visita anterior (i+1 es la visita anterior porque está ordenado desc)
+    let diasGap = '—';
+    let gapColor = '#64748b';
+    const fechaActual = parseDate(v['Fecha Visita']);
+    const siguiente = visitasSlice[i + 1];
+    if (siguiente && fechaActual) {
+      const fechaAnterior = parseDate(siguiente['Fecha Visita']);
+      if (fechaAnterior && fechaActual > fechaAnterior) {
+        const diff = Math.round((fechaActual - fechaAnterior) / (1000*60*60*24));
+        diasGap = diff + 'd';
+        gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
+      }
+    }
+    return `<tr>
+      <td style="white-space:nowrap">${v['Fecha Visita'] || '—'}</td>
+      <td style="text-align:center"><span style="font-weight:700;color:${gapColor};font-size:13px">${diasGap}</span></td>
+      <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
+      <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').style.display = 'none';
+    if (chartHist) { chartHist.destroy(); chartHist = null; }
+  }
+}
+
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+// ============================================================
+// DASHBOARD HELPERS
+// ============================================================
+let dashPeriodo = 'hoy';
+
+function setPeriodo(btn) {
+  dashPeriodo = btn.dataset.periodo;
+  document.querySelectorAll('.periodo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customDiv = document.getElementById('dash-custom-dates');
+  if (customDiv) customDiv.style.display = dashPeriodo === 'custom' ? 'flex' : 'none';
+  renderDashboard();
+}
+
+let dashTab = 'resumen';
+function setDashTab(tab) {
+  dashTab = tab;
+  document.getElementById('dash-tab-resumen').classList.toggle('active', tab === 'resumen');
+  document.getElementById('dash-tab-detalle').classList.toggle('active', tab === 'detalle');
+  document.getElementById('dash-tabla-resumen').style.display = tab === 'resumen' ? 'block' : 'none';
+  document.getElementById('dash-tabla-detalle').style.display = tab === 'detalle' ? 'block' : 'none';
+  if (tab === 'detalle') renderDashDetalle();
+}
+
+let _detalleData = [];
+function renderDashDetalle() {
+  const tipo = (document.getElementById('dash-detalle-tipo') || {}).value || '';
+  const rows = tipo ? _detalleData.filter(v => v['Visita/Venta'] === tipo) : _detalleData;
+  const tbody = document.getElementById('dash-detalle-body');
+  const countEl = document.getElementById('dash-detalle-count');
+  if (countEl) countEl.textContent = '(' + rows.length + ' registros)';
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(v => {
+    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0;
+    const dist = parseFloat(v['Distancia'] || '') || 0;
+    const esVenta = v['Visita/Venta'] === 'Venta';
+    const anomalia = dist > 2;
+    return `<tr style="border-bottom:1px solid var(--border);${anomalia?'background:rgba(220,38,38,0.04)':''}">
+      <td style="padding:6px">${v['Fecha Visita'] || ''}</td>
+      <td style="padding:6px;color:var(--text2)">${v['Hora'] || ''}</td>
+      <td style="padding:6px;font-weight:500">${v['client_name'] || '—'}</td>
+      <td style="padding:6px;color:var(--text2)">${v['salesman_name'] || '—'}</td>
+      <td style="padding:6px"><span style="background:${esVenta?'rgba(22,163,74,0.12)':'rgba(59,130,246,0.1)'};color:${esVenta?'#16a34a':'#2563eb'};border-radius:4px;padding:2px 6px;font-size:11px">${v['Visita/Venta'] || '—'}</span></td>
+      <td style="padding:6px;text-align:right;font-weight:600;color:${esVenta?'var(--accent)':'var(--text2)'}">${esVenta ? '$'+Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+      <td style="padding:6px;text-align:right;color:${anomalia?'#dc2626':'var(--text2)'};font-weight:${anomalia?'700':'400'}">${dist > 0 ? dist.toFixed(1)+'km' : '—'}${anomalia?' ⚠️':''}</td>
+      <td style="padding:6px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(v.comments || '').replace(/[<>"]/g, ' ')}">${v['comments'] || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+}
+
+function resetDashDates() {
+  if (document.getElementById('dash-desde')) document.getElementById('dash-desde').value = '';
+  if (document.getElementById('dash-hasta')) document.getElementById('dash-hasta').value = '';
+  renderDashboard();
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // DD/MM/YYYY
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+  return new Date(str);
+}
+
+function renderDashboard() {
+  const vendedor = document.getElementById('dash-vendedor').value;
+  const comuna = document.getElementById('dash-comuna').value;
+  const search = document.getElementById('dash-search').value.toLowerCase();
+  const desde = document.getElementById('dash-desde').value ? new Date(document.getElementById('dash-desde').value) : null;
+  const hasta = document.getElementById('dash-hasta').value ? new Date(document.getElementById('dash-hasta').value) : null;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay() + 1); // lunes
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  
+  function parseMonto(v) { return parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0; }
+  
+  // Calcular rango de fechas según período seleccionado
+  let periodoDesde = null, periodoHasta = null;
+  if (dashPeriodo === 'hoy') {
+    periodoDesde = startOfDay; periodoHasta = null;
+  } else if (dashPeriodo === 'semana') {
+    periodoDesde = startOfWeek; periodoHasta = null;
+  } else if (dashPeriodo === 'mes') {
+    periodoDesde = startOfMonth; periodoHasta = null;
+  } else if (dashPeriodo === 'anio') {
+    periodoDesde = new Date(now.getFullYear(), 0, 1); periodoHasta = null;
+  } else if (dashPeriodo === 'custom') {
+    periodoDesde = desde; periodoHasta = hasta;
+  }
+
+  let todasVisitas = visitasData.filter(v => {
+    if (!parseMonto(v) && v['Visita/Venta'] !== 'Visita') return false;
+    if (vendedor && v['salesman_name'] !== vendedor) return false;
+    if (comuna && normalizeComuna(v['locality']) !== comuna) return false;
+    if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Visitas del período (incluye visitas y ventas para tabla detalle)
+  let visitasPeriodo = todasVisitas.filter(v => {
+    const fecha = parseDate(v['Fecha Visita']);
+    if (periodoDesde && fecha && fecha < periodoDesde) return false;
+    if (periodoHasta && fecha && fecha > periodoHasta) return false;
+    return true;
+  }).sort((a,b) => {
+    const fa = parseDate(a['Fecha Visita']), fb = parseDate(b['Fecha Visita']);
+    return (fb || 0) - (fa || 0);
+  });
+
+  // Solo ventas para cálculos de KPIs y charts
+  let ventasFiltradas = visitasPeriodo.filter(v => {
+    if (v['Visita/Venta'] !== 'Venta') return false;
+    if (!parseMonto(v)) return false;
+    return true;
+  });
+
+  // Guardar para tabla detalle
+  _detalleData = visitasPeriodo;
+
+  // KPIs siempre en base a períodos fijos - solo ventas con monto
+  const soloVentas = todasVisitas.filter(v => v['Visita/Venta'] === 'Venta' && parseMonto(v) > 0);
+  const totalDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalSemana = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMesAnterior = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  
+  // Pedidos y tickets
+  const pedidosDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
+  const pedidosMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
+  const ticketPromMes = pedidosMes ? Math.round(totalMes / pedidosMes) : 0;
+  
+  // Clientes únicos del mes
+  const clientesUnicos = new Set(soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
+  
+  // Días hábiles reales (L-V) — contar exactamente desde el 1ro del mes hasta hoy
+  function contarDiasHabilesEnMes(desde, hasta) {
+    // desde: Date primer día del mes, hasta: Date hoy (inclusive)
+    let count = 0;
+    const d = new Date(desde);
+    while (d <= hasta) {
+      const dow = d.getDay(); // 0=Dom, 6=Sab
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function contarDiasHabilesTotalesMes(anio, mes) {
+    // Total días hábiles del mes completo
+    const primerDia = new Date(anio, mes, 1);
+    const ultimoDia = new Date(anio, mes + 1, 0); // último día del mes
+    return contarDiasHabilesEnMes(primerDia, ultimoDia);
+  }
+
+  const hoy = startOfDay;
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const diasHabilesTranscurridos = contarDiasHabilesEnMes(primerDiaMes, hoy);
+  const diasHabilesTotalesMes = contarDiasHabilesTotalesMes(hoy.getFullYear(), hoy.getMonth());
+  const diasHabilesRestantes = diasHabilesTotalesMes - diasHabilesTranscurridos;
+
+  // Meta basada en META_DIARIA = $2.000.000 por día hábil
+  const metaDia = META_DIARIA;
+  const metaSemana = META_DIARIA * 5;
+  const metaMes = META_DIARIA * diasHabilesTotalesMes; // meta total del mes
+  const metaMesTranscurrido = META_DIARIA * diasHabilesTranscurridos; // meta acumulada hasta hoy
+  const proyeccion = diasHabilesTranscurridos > 0
+    ? Math.round(totalMes / diasHabilesTranscurridos * diasHabilesTotalesMes)
+    : 0;
+
+  // Variación mes vs mes anterior
+  const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
+  
+  function pct(v, m) { return m > 0 ? Math.round(v/m*100) : 0; }
+  function metaStr(v, m) {
+    const p = pct(v,m);
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#ca8a04' : '#dc2626';
+    const icon = p >= 100 ? '✅' : p >= 70 ? '⚠️' : '🔴';
+    return `<span style="color:${color};font-size:11px;font-weight:600">${icon} ${p}% de meta ($${Math.round(m).toLocaleString('es-CL')})</span>`;
+  }
+  function bar(v, m) {
+    const p = Math.min(100, pct(v,m));
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#eab308' : '#ef4444';
+    return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
+  }
+  function varStr(v) {
+    if (v === null) return '';
+    return `<span style="color:${v>=0?'#16a34a':'#dc2626'};font-size:11px">${v>=0?'+':''}${v}% vs mes ant.</span>`;
+  }
+
+  // Texto descriptivo de la meta
+  const metaDiaFmt = '$' + Math.round(metaDia).toLocaleString('es-CL');
+  const metaMesTransFmt = '$' + Math.round(metaMesTranscurrido).toLocaleString('es-CL');
+
+  document.getElementById('dash-calugas').innerHTML = `
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta hoy</div>
+      <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos · meta ${metaDiaFmt}</div>
+      ${metaStr(totalDia, metaDia)}
+      ${bar(totalDia, metaDia)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta semana</div>
+      <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">L-V · meta $${Math.round(metaSemana).toLocaleString('es-CL')}</div>
+      ${metaStr(totalSemana, metaSemana)}
+      ${bar(totalSemana, metaSemana)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta mes</div>
+      <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)} · meta al día: ${metaMesTransFmt}</div>
+      ${metaStr(totalMes, metaMesTranscurrido)}
+      ${bar(totalMes, metaMesTranscurrido)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Proyección mes</div>
+      <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${metaMes.toLocaleString('es-CL')}</div>
+      ${metaStr(proyeccion, metaMes)}
+      ${bar(proyeccion, metaMes)}
+    </div>
+  `;
+
+  document.getElementById('dash-calugas2').innerHTML = `
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Pedidos mes</div>
+      <div class="dash-caluga-num" style="font-size:24px">${pedidosMes}</div>
+      <div style="font-size:11px;color:var(--text2)">Ventas únicas</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Ticket promedio</div>
+      <div class="dash-caluga-num" style="font-size:22px">$${ticketPromMes.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">Este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Clientes activos</div>
+      <div class="dash-caluga-num" style="font-size:24px">${clientesUnicos.size}</div>
+      <div style="font-size:11px;color:var(--text2)">Compraron este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Mes anterior</div>
+      <div class="dash-caluga-num" style="font-size:20px">$${Math.round(totalMesAnterior).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)}</div>
+    </div>
+  `;
+  
+  // Chart: últimos 30 días
+  const last30days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(startOfDay); d.setDate(d.getDate() - i);
+    last30days.push(d);
+  }
+  const dailyMap = {};
+  ventasFiltradas.forEach(v => {
+    const f = parseDate(v['Fecha Visita']);
+    if (!f) return;
+    const key = `${f.getDate()}/${f.getMonth()+1}`;
+    dailyMap[key] = (dailyMap[key] || 0) + parseMonto(v);
+  });
+  const chartLabels = last30days.map(d => `${d.getDate()}/${d.getMonth()+1}`);
+  const chartData = chartLabels.map(k => dailyMap[k] || 0);
+  const metaDiaLine = Array(30).fill(metaDia);
+  
+  // Charts desactivados (canvas ocultos, no se necesitan)
+  // Top 10 clientes
+  const clientMap = {};
+  const clientData = {};
+  ventasFiltradas.forEach(v => {
+    const n = v['client_name'] || '—';
+    const loc = normalizeComuna(v['locality'] || '');
+    if (!clientMap[n]) { clientMap[n] = 0; clientData[n] = { loc, count: 0 }; }
+    clientMap[n] += parseMonto(v);
+    clientData[n].count++;
+  });
+  const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const top20 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,20);
+  
+  // Chart vendedores
+  const vendMap = {};
+  ventasFiltradas.forEach(v => {
+    const vend = v['salesman_name'] || 'Otro';
+    vendMap[vend] = (vendMap[vend] || 0) + parseMonto(v);
+  });
+  const vendEntries = Object.entries(vendMap).sort((a,b) => b[1]-a[1]);
+  const COLORS_VEND = ['#4f6ef7','#7c3aed','#16a34a','#ea580c','#0891b2','#db2777'];
+  
+  // Si está en tab detalle, actualizar tabla detalle
+  if (dashTab === 'detalle') renderDashDetalle();
+
+  // Tabla top 20
+  const tbody = document.getElementById('dash-tabla-body');
+  if (tbody) {
+    tbody.innerHTML = top20.map(([nombre, total], i) => {
+      const d = clientData[nombre] || {};
+      const ticket = d.count ? Math.round(total / d.count) : 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${i+1}</td>
+        <td style="padding:7px 6px;font-weight:500;font-size:13px">${nombre}</td>
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${d.loc || '—'}</td>
+        <td style="padding:7px 6px;text-align:right;font-size:12px">${d.count}</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:600;color:var(--accent)">${'$'+Math.round(total).toLocaleString('es-CL')}</td>
+        <td style="padding:7px 6px;text-align:right;color:var(--text2);font-size:12px">$${ticket.toLocaleString('es-CL')}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+function renderAdmin() {
+  const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
+  const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
+  const gpsDesdeEl = document.getElementById('gps-desde');
+  const gpsHastaEl = document.getElementById('gps-hasta');
+  const gpsDesde = gpsDesdeEl && gpsDesdeEl.value ? new Date(gpsDesdeEl.value) : null;
+  const gpsHasta = gpsHastaEl && gpsHastaEl.value ? new Date(gpsHastaEl.value) : null;
+
+  // Poblar select de vendedores en GPS si está vacío
+  const gpsVendSel = document.getElementById('gps-vendedor');
+  if (gpsVendSel && gpsVendSel.options.length <= 1) {
+    const vends = [...new Set(visitasData.map(v => v['salesman_name']).filter(Boolean))].sort();
+    vends.forEach(v => { const o = new Option(v,v); gpsVendSel.add(o); });
+  }
+  
+  // GPS anomalías con filtros
+  const anomalias = visitasData.filter(v => {
+    const dist = parseFloat(v['Distancia']);
+    if (isNaN(dist) || dist <= threshold) return false;
+    if (gpsVendedor && v['salesman_name'] !== gpsVendedor) return false;
+    const f = parseDate(v['Fecha Visita']);
+    if (gpsDesde && f && f < gpsDesde) return false;
+    if (gpsHasta && f && f > gpsHasta) return false;
+    return true;
+  }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
+  
+  document.getElementById('gps-count').textContent = anomalias.length;
+  
+  const gpsList = document.getElementById('gps-list');
+  if (!anomalias.length) {
+    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
+  } else {
+    gpsList.innerHTML = anomalias.slice(0, 50).map(v => `
+      <div class="alert-card">
+        <div class="alert-icon">📍</div>
+        <div class="alert-info">
+          <div class="alert-name">${v['client_name'] || '—'}</div>
+          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${normalizeComuna(v['locality'] || '')}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(220,38,38,0.15);color:#dc2626;font-weight:600">${parseFloat(v['Distancia']).toFixed(1)} km</span>
+      </div>
+    `).join('');
+  }
+  
+  // Solicitudes de baja (por comentario con "eliminar" o "baja")
+  const bajas = Object.values(allClientsMap).filter(c => {
+    const comment = (c.visitas.find(v => {
+      const comm = (v['comments'] || '').toLowerCase();
+      return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+    }));
+    return !!comment;
+  });
+  
+  document.getElementById('baja-count').textContent = bajas.length;
+  const bajaList = document.getElementById('baja-list');
+  if (!bajas.length) {
+    bajaList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin solicitudes de baja</div></div>';
+  } else {
+    bajaList.innerHTML = bajas.map(c => {
+      const v = c.visitas.find(v => {
+        const comm = (v['comments'] || '').toLowerCase();
+        return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+      });
+      return `<div class="alert-card">
+        <div class="alert-icon">🗑️</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · ${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'}</div>
+          <div class="alert-detail" style="color:#fbbf24;margin-top:4px">"${v['comments']}"</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="approveDelete('${c.codigo}')" style="background:#22c55e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Aprobar</button>
+          <button onclick="rejectDelete('${c.codigo}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rechazar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function approveDelete(codigo) {
+  if (confirm('¿Confirmar eliminación de cliente de seguimiento?')) {
+    alert('Marcado para eliminar. Acción debe confirmarse en el sheet.');
+  }
+}
+function rejectDelete(codigo) {
+  alert('Solicitud rechazada.');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  event.target.classList.add('active');
+  
+  // Filtro compartido: visible solo en mapa y lista
+  const sf = document.getElementById('shared-filter');
+  const sc = document.getElementById('shared-calugas');
+  const showShared = (name === 'map' || name === 'list');
+  if (sf) sf.style.display = showShared ? 'flex' : 'none';
+  if (sc) sc.style.display = showShared ? 'flex' : 'none';
+
+  if (name === 'map') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+    applySharedFilter(); // sync mapa con filtro actual
+  }
+  if (name === 'list') {
+    applySharedFilter(); // sync lista con filtro actual
+  }
+}
+
+// ============================================================
+// INIT + AUTO-REFRESH
+// ============================================================
+loadData();
+
+// Auto-refresh cada 5 minutos (300.000 ms) — 0 créditos, lee CSV directo
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
+setInterval(async () => {
+  // Solo refresca si la pestaña está visible
+  if (document.visibilityState === 'hidden') return;
+  await loadData(true);
+  // Mostrar brevemente el timestamp actualizado sin interrumpir al usuario
+}, AUTO_REFRESH_INTERVAL);
+
+// Contador regresivo en el botón de refresh
+let countdown = AUTO_REFRESH_INTERVAL / 1000;
+const refreshBtn = document.getElementById('refresh-btn');
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) countdown = AUTO_REFRESH_INTERVAL / 1000;
+  if (refreshBtn && !refreshBtn.disabled) {
+    const min = Math.floor(countdown / 60);
+    const sec = String(countdown % 60).padStart(2, '0');
+    refreshBtn.title = `Próximo refresco: ${min}:${sec}`;
+  }
+}, 1000);
+</script>
+</body>
+</html>
+  renderCalugas(clients);
+
+  // Table
+  const tbody = document.getElementById('list-body');
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
+    return;
+  }
+  
+  // Helper compartido para datos de fila
+  function clientRowData(c) {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
+    const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
+    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : null;
+    const nuncaCompro = !c.ultimaCompra || c.ultimaCompra === '' || c.ultimaCompra.includes('1899');
+    const COLORS = {ok:'#3b82f6',green:'#22c55e',yellow:'#eab308',red:'#ef4444',critical:'#7f1d1d',nodata:'#94a3b8',noseg:'#94a3b8'};
+    return { st, badgeClass, diasStr, ticketStr, nuncaCompro, stColor: COLORS[st] || '#94a3b8' };
+  }
+
+  // Tabla desktop
+  tbody.innerHTML = clients.map(c => {
+    const { st, badgeClass, diasStr, ticketStr, nuncaCompro } = clientRowData(c);
+    const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
+    return `
+      <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
+        <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
+        <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
+        <td>${c.ultimaVisita || '—'}</td>
+        <td style="text-align:center">${c.diasSinContacto || '—'}</td>
+        <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td>${tStr}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
+            <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Tarjetas móvil (estilo alert-card)
+  const isMobile = window.innerWidth < 700;
+  const tableWrap = document.querySelector('.table-wrap');
+  if (tableWrap) tableWrap.style.display = isMobile ? 'none' : '';
+  const cardsEl = document.getElementById('list-cards');
+  if (cardsEl) {
+    cardsEl.style.display = isMobile ? 'block' : 'none';
+    cardsEl.innerHTML = clients.map(c => {
+      const { st, badgeClass, diasStr, ticketStr, stColor } = clientRowData(c);
+      return `<div class="alert-card" style="border-left:3px solid ${stColor}">
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'}</div>
+          <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
+            <span class="${badgeClass}" style="font-size:11px">${diasStr} ${STATUS_LABELS[st]}</span>
+            <span style="font-size:11px;color:var(--text2)">📅 ${c.ultimaVisita || 'Sin visita'}</span>
+            <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
+            ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
+            ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+          ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
+          <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// HISTORIAL MODAL
+// ============================================================
+function renderList() {
+  applySharedFilter();
+}
+
+function openHistorial(codigo) {
+  const c = allClientsMap[codigo];
+  if (!c) return;
+  
+  document.getElementById('modal-name').textContent = c.nombre;
+  document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
+  
+  // Visitas del cliente
+  const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
+    .sort((a,b) => {
+      const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
+      const db = parseDate(b['Fecha Visita'] || b['date']) || new Date(0);
+      return db - da;
+    });
+  
+  const ventas = visitas.filter(v => v['Visita/Venta'] === 'Venta');
+  const totalVentas = ventas.reduce((s, v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const ticketProm = ventas.length ? totalVentas / ventas.length : 0;
+  
+  document.getElementById('modal-stats').innerHTML = `
+    <div class="modal-stat"><div class="modal-stat-val">${visitas.length}</div><div class="modal-stat-lbl">Total visitas</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${ventas.length}</div><div class="modal-stat-lbl">Compras</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(ticketProm).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Ticket promedio</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
+  `;
+  
+  // Chart historial
+  const last30 = visitas.slice(0, 30).reverse();
+  const labels = last30.map(v => v['Fecha Visita'] || '');
+  const montos = last30.map(v => v['Visita/Venta'] === 'Venta' ? (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0) : 0);
+  
+  if (chartHist) chartHist.destroy();
+  const ctx = document.getElementById('chart-hist').getContext('2d');
+  chartHist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Venta neta',
+        data: montos,
+        backgroundColor: '#4f6ef7',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#6b7280', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#e5e7eb' } }
+      }
+    }
+  });
+  
+  // Tabla
+  const tbody = document.getElementById('modal-hist-body');
+  // visitas ya viene ordenado desc por fecha; para calcular gap comparamos con la siguiente (más antigua)
+  const visitasSlice = visitas.slice(0, 50);
+  tbody.innerHTML = visitasSlice.map((v, i) => {
+    const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
+    const tipo = v['Visita/Venta'] || 'Visita';
+    const color = tipo === 'Venta' ? '#16a34a' : '#9ca3af';
+    // Calcular días desde visita anterior (i+1 es la visita anterior porque está ordenado desc)
+    let diasGap = '—';
+    let gapColor = '#64748b';
+    const fechaActual = parseDate(v['Fecha Visita']);
+    const siguiente = visitasSlice[i + 1];
+    if (siguiente && fechaActual) {
+      const fechaAnterior = parseDate(siguiente['Fecha Visita']);
+      if (fechaAnterior && fechaActual > fechaAnterior) {
+        const diff = Math.round((fechaActual - fechaAnterior) / (1000*60*60*24));
+        diasGap = diff + 'd';
+        gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
+      }
+    }
+    return `<tr>
+      <td style="white-space:nowrap">${v['Fecha Visita'] || '—'}</td>
+      <td style="text-align:center"><span style="font-weight:700;color:${gapColor};font-size:13px">${diasGap}</span></td>
+      <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
+      <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').style.display = 'none';
+    if (chartHist) { chartHist.destroy(); chartHist = null; }
+  }
+}
+
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+// ============================================================
+// DASHBOARD HELPERS
+// ============================================================
+let dashPeriodo = 'hoy';
+
+function setPeriodo(btn) {
+  dashPeriodo = btn.dataset.periodo;
+  document.querySelectorAll('.periodo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customDiv = document.getElementById('dash-custom-dates');
+  if (customDiv) customDiv.style.display = dashPeriodo === 'custom' ? 'flex' : 'none';
+  renderDashboard();
+}
+
+let dashTab = 'resumen';
+function setDashTab(tab) {
+  dashTab = tab;
+  document.getElementById('dash-tab-resumen').classList.toggle('active', tab === 'resumen');
+  document.getElementById('dash-tab-detalle').classList.toggle('active', tab === 'detalle');
+  document.getElementById('dash-tabla-resumen').style.display = tab === 'resumen' ? 'block' : 'none';
+  document.getElementById('dash-tabla-detalle').style.display = tab === 'detalle' ? 'block' : 'none';
+  if (tab === 'detalle') renderDashDetalle();
+}
+
+let _detalleData = [];
+function renderDashDetalle() {
+  const tipo = (document.getElementById('dash-detalle-tipo') || {}).value || '';
+  const rows = tipo ? _detalleData.filter(v => v['Visita/Venta'] === tipo) : _detalleData;
+  const tbody = document.getElementById('dash-detalle-body');
+  const countEl = document.getElementById('dash-detalle-count');
+  if (countEl) countEl.textContent = '(' + rows.length + ' registros)';
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(v => {
+    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0;
+    const dist = parseFloat(v['Distancia'] || '') || 0;
+    const esVenta = v['Visita/Venta'] === 'Venta';
+    const anomalia = dist > 2;
+    return `<tr style="border-bottom:1px solid var(--border);${anomalia?'background:rgba(220,38,38,0.04)':''}">
+      <td style="padding:6px">${v['Fecha Visita'] || ''}</td>
+      <td style="padding:6px;color:var(--text2)">${v['Hora'] || ''}</td>
+      <td style="padding:6px;font-weight:500">${v['client_name'] || '—'}</td>
+      <td style="padding:6px;color:var(--text2)">${v['salesman_name'] || '—'}</td>
+      <td style="padding:6px"><span style="background:${esVenta?'rgba(22,163,74,0.12)':'rgba(59,130,246,0.1)'};color:${esVenta?'#16a34a':'#2563eb'};border-radius:4px;padding:2px 6px;font-size:11px">${v['Visita/Venta'] || '—'}</span></td>
+      <td style="padding:6px;text-align:right;font-weight:600;color:${esVenta?'var(--accent)':'var(--text2)'}">${esVenta ? '$'+Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+      <td style="padding:6px;text-align:right;color:${anomalia?'#dc2626':'var(--text2)'};font-weight:${anomalia?'700':'400'}">${dist > 0 ? dist.toFixed(1)+'km' : '—'}${anomalia?' ⚠️':''}</td>
+      <td style="padding:6px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(v.comments || '').replace(/[<>"]/g, ' ')}">${v['comments'] || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+}
+
+function resetDashDates() {
+  if (document.getElementById('dash-desde')) document.getElementById('dash-desde').value = '';
+  if (document.getElementById('dash-hasta')) document.getElementById('dash-hasta').value = '';
+  renderDashboard();
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // DD/MM/YYYY
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+  return new Date(str);
+}
+
+function renderDashboard() {
+  const vendedor = document.getElementById('dash-vendedor').value;
+  const comuna = document.getElementById('dash-comuna').value;
+  const search = document.getElementById('dash-search').value.toLowerCase();
+  const desde = document.getElementById('dash-desde').value ? new Date(document.getElementById('dash-desde').value) : null;
+  const hasta = document.getElementById('dash-hasta').value ? new Date(document.getElementById('dash-hasta').value) : null;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay() + 1); // lunes
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  
+  function parseMonto(v) { return parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0; }
+  
+  // Calcular rango de fechas según período seleccionado
+  let periodoDesde = null, periodoHasta = null;
+  if (dashPeriodo === 'hoy') {
+    periodoDesde = startOfDay; periodoHasta = null;
+  } else if (dashPeriodo === 'semana') {
+    periodoDesde = startOfWeek; periodoHasta = null;
+  } else if (dashPeriodo === 'mes') {
+    periodoDesde = startOfMonth; periodoHasta = null;
+  } else if (dashPeriodo === 'anio') {
+    periodoDesde = new Date(now.getFullYear(), 0, 1); periodoHasta = null;
+  } else if (dashPeriodo === 'custom') {
+    periodoDesde = desde; periodoHasta = hasta;
+  }
+
+  let todasVisitas = visitasData.filter(v => {
+    if (!parseMonto(v) && v['Visita/Venta'] !== 'Visita') return false;
+    if (vendedor && v['salesman_name'] !== vendedor) return false;
+    if (comuna && normalizeComuna(v['locality']) !== comuna) return false;
+    if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Visitas del período (incluye visitas y ventas para tabla detalle)
+  let visitasPeriodo = todasVisitas.filter(v => {
+    const fecha = parseDate(v['Fecha Visita']);
+    if (periodoDesde && fecha && fecha < periodoDesde) return false;
+    if (periodoHasta && fecha && fecha > periodoHasta) return false;
+    return true;
+  }).sort((a,b) => {
+    const fa = parseDate(a['Fecha Visita']), fb = parseDate(b['Fecha Visita']);
+    return (fb || 0) - (fa || 0);
+  });
+
+  // Solo ventas para cálculos de KPIs y charts
+  let ventasFiltradas = visitasPeriodo.filter(v => {
+    if (v['Visita/Venta'] !== 'Venta') return false;
+    if (!parseMonto(v)) return false;
+    return true;
+  });
+
+  // Guardar para tabla detalle
+  _detalleData = visitasPeriodo;
+
+  // KPIs siempre en base a períodos fijos - solo ventas con monto
+  const soloVentas = todasVisitas.filter(v => v['Visita/Venta'] === 'Venta' && parseMonto(v) > 0);
+  const totalDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalSemana = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMesAnterior = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  
+  // Pedidos y tickets
+  const pedidosDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
+  const pedidosMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
+  const ticketPromMes = pedidosMes ? Math.round(totalMes / pedidosMes) : 0;
+  
+  // Clientes únicos del mes
+  const clientesUnicos = new Set(soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
+  
+  // Días hábiles reales (L-V) — contar exactamente desde el 1ro del mes hasta hoy
+  function contarDiasHabilesEnMes(desde, hasta) {
+    // desde: Date primer día del mes, hasta: Date hoy (inclusive)
+    let count = 0;
+    const d = new Date(desde);
+    while (d <= hasta) {
+      const dow = d.getDay(); // 0=Dom, 6=Sab
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function contarDiasHabilesTotalesMes(anio, mes) {
+    // Total días hábiles del mes completo
+    const primerDia = new Date(anio, mes, 1);
+    const ultimoDia = new Date(anio, mes + 1, 0); // último día del mes
+    return contarDiasHabilesEnMes(primerDia, ultimoDia);
+  }
+
+  const hoy = startOfDay;
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const diasHabilesTranscurridos = contarDiasHabilesEnMes(primerDiaMes, hoy);
+  const diasHabilesTotalesMes = contarDiasHabilesTotalesMes(hoy.getFullYear(), hoy.getMonth());
+  const diasHabilesRestantes = diasHabilesTotalesMes - diasHabilesTranscurridos;
+
+  // Meta basada en META_DIARIA = $2.000.000 por día hábil
+  const metaDia = META_DIARIA;
+  const metaSemana = META_DIARIA * 5;
+  const metaMes = META_DIARIA * diasHabilesTotalesMes; // meta total del mes
+  const metaMesTranscurrido = META_DIARIA * diasHabilesTranscurridos; // meta acumulada hasta hoy
+  const proyeccion = diasHabilesTranscurridos > 0
+    ? Math.round(totalMes / diasHabilesTranscurridos * diasHabilesTotalesMes)
+    : 0;
+
+  // Variación mes vs mes anterior
+  const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
+  
+  function pct(v, m) { return m > 0 ? Math.round(v/m*100) : 0; }
+  function metaStr(v, m) {
+    const p = pct(v,m);
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#ca8a04' : '#dc2626';
+    const icon = p >= 100 ? '✅' : p >= 70 ? '⚠️' : '🔴';
+    return `<span style="color:${color};font-size:11px;font-weight:600">${icon} ${p}% de meta ($${Math.round(m).toLocaleString('es-CL')})</span>`;
+  }
+  function bar(v, m) {
+    const p = Math.min(100, pct(v,m));
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#eab308' : '#ef4444';
+    return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
+  }
+  function varStr(v) {
+    if (v === null) return '';
+    return `<span style="color:${v>=0?'#16a34a':'#dc2626'};font-size:11px">${v>=0?'+':''}${v}% vs mes ant.</span>`;
+  }
+
+  // Texto descriptivo de la meta
+  const metaDiaFmt = '$' + Math.round(metaDia).toLocaleString('es-CL');
+  const metaMesTransFmt = '$' + Math.round(metaMesTranscurrido).toLocaleString('es-CL');
+
+  document.getElementById('dash-calugas').innerHTML = `
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta hoy</div>
+      <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos · meta ${metaDiaFmt}</div>
+      ${metaStr(totalDia, metaDia)}
+      ${bar(totalDia, metaDia)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta semana</div>
+      <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">L-V · meta $${Math.round(metaSemana).toLocaleString('es-CL')}</div>
+      ${metaStr(totalSemana, metaSemana)}
+      ${bar(totalSemana, metaSemana)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta mes</div>
+      <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)} · meta al día: ${metaMesTransFmt}</div>
+      ${metaStr(totalMes, metaMesTranscurrido)}
+      ${bar(totalMes, metaMesTranscurrido)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Proyección mes</div>
+      <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${metaMes.toLocaleString('es-CL')}</div>
+      ${metaStr(proyeccion, metaMes)}
+      ${bar(proyeccion, metaMes)}
+    </div>
+  `;
+
+  document.getElementById('dash-calugas2').innerHTML = `
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Pedidos mes</div>
+      <div class="dash-caluga-num" style="font-size:24px">${pedidosMes}</div>
+      <div style="font-size:11px;color:var(--text2)">Ventas únicas</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Ticket promedio</div>
+      <div class="dash-caluga-num" style="font-size:22px">$${ticketPromMes.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">Este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Clientes activos</div>
+      <div class="dash-caluga-num" style="font-size:24px">${clientesUnicos.size}</div>
+      <div style="font-size:11px;color:var(--text2)">Compraron este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Mes anterior</div>
+      <div class="dash-caluga-num" style="font-size:20px">$${Math.round(totalMesAnterior).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)}</div>
+    </div>
+  `;
+  
+  // Chart: últimos 30 días
+  const last30days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(startOfDay); d.setDate(d.getDate() - i);
+    last30days.push(d);
+  }
+  const dailyMap = {};
+  ventasFiltradas.forEach(v => {
+    const f = parseDate(v['Fecha Visita']);
+    if (!f) return;
+    const key = `${f.getDate()}/${f.getMonth()+1}`;
+    dailyMap[key] = (dailyMap[key] || 0) + parseMonto(v);
+  });
+  const chartLabels = last30days.map(d => `${d.getDate()}/${d.getMonth()+1}`);
+  const chartData = chartLabels.map(k => dailyMap[k] || 0);
+  const metaDiaLine = Array(30).fill(metaDia);
+  
+  // Charts desactivados (canvas ocultos, no se necesitan)
+  // Top 10 clientes
+  const clientMap = {};
+  const clientData = {};
+  ventasFiltradas.forEach(v => {
+    const n = v['client_name'] || '—';
+    const loc = normalizeComuna(v['locality'] || '');
+    if (!clientMap[n]) { clientMap[n] = 0; clientData[n] = { loc, count: 0 }; }
+    clientMap[n] += parseMonto(v);
+    clientData[n].count++;
+  });
+  const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const top20 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,20);
+  
+  // Chart vendedores
+  const vendMap = {};
+  ventasFiltradas.forEach(v => {
+    const vend = v['salesman_name'] || 'Otro';
+    vendMap[vend] = (vendMap[vend] || 0) + parseMonto(v);
+  });
+  const vendEntries = Object.entries(vendMap).sort((a,b) => b[1]-a[1]);
+  const COLORS_VEND = ['#4f6ef7','#7c3aed','#16a34a','#ea580c','#0891b2','#db2777'];
+  
+  // Si está en tab detalle, actualizar tabla detalle
+  if (dashTab === 'detalle') renderDashDetalle();
+
+  // Tabla top 20
+  const tbody = document.getElementById('dash-tabla-body');
+  if (tbody) {
+    tbody.innerHTML = top20.map(([nombre, total], i) => {
+      const d = clientData[nombre] || {};
+      const ticket = d.count ? Math.round(total / d.count) : 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${i+1}</td>
+        <td style="padding:7px 6px;font-weight:500;font-size:13px">${nombre}</td>
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${d.loc || '—'}</td>
+        <td style="padding:7px 6px;text-align:right;font-size:12px">${d.count}</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:600;color:var(--accent)">${'$'+Math.round(total).toLocaleString('es-CL')}</td>
+        <td style="padding:7px 6px;text-align:right;color:var(--text2);font-size:12px">$${ticket.toLocaleString('es-CL')}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+function renderAdmin() {
+  const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
+  const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
+  const gpsDesdeEl = document.getElementById('gps-desde');
+  const gpsHastaEl = document.getElementById('gps-hasta');
+  const gpsDesde = gpsDesdeEl && gpsDesdeEl.value ? new Date(gpsDesdeEl.value) : null;
+  const gpsHasta = gpsHastaEl && gpsHastaEl.value ? new Date(gpsHastaEl.value) : null;
+
+  // Poblar select de vendedores en GPS si está vacío
+  const gpsVendSel = document.getElementById('gps-vendedor');
+  if (gpsVendSel && gpsVendSel.options.length <= 1) {
+    const vends = [...new Set(visitasData.map(v => v['salesman_name']).filter(Boolean))].sort();
+    vends.forEach(v => { const o = new Option(v,v); gpsVendSel.add(o); });
+  }
+  
+  // GPS anomalías con filtros
+  const anomalias = visitasData.filter(v => {
+    const dist = parseFloat(v['Distancia']);
+    if (isNaN(dist) || dist <= threshold) return false;
+    if (gpsVendedor && v['salesman_name'] !== gpsVendedor) return false;
+    const f = parseDate(v['Fecha Visita']);
+    if (gpsDesde && f && f < gpsDesde) return false;
+    if (gpsHasta && f && f > gpsHasta) return false;
+    return true;
+  }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
+  
+  document.getElementById('gps-count').textContent = anomalias.length;
+  
+  const gpsList = document.getElementById('gps-list');
+  if (!anomalias.length) {
+    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
+  } else {
+    gpsList.innerHTML = anomalias.slice(0, 50).map(v => `
+      <div class="alert-card">
+        <div class="alert-icon">📍</div>
+        <div class="alert-info">
+          <div class="alert-name">${v['client_name'] || '—'}</div>
+          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${normalizeComuna(v['locality'] || '')}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(220,38,38,0.15);color:#dc2626;font-weight:600">${parseFloat(v['Distancia']).toFixed(1)} km</span>
+      </div>
+    `).join('');
+  }
+  
+  // Solicitudes de baja (por comentario con "eliminar" o "baja")
+  const bajas = Object.values(allClientsMap).filter(c => {
+    const comment = (c.visitas.find(v => {
+      const comm = (v['comments'] || '').toLowerCase();
+      return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+    }));
+    return !!comment;
+  });
+  
+  document.getElementById('baja-count').textContent = bajas.length;
+  const bajaList = document.getElementById('baja-list');
+  if (!bajas.length) {
+    bajaList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin solicitudes de baja</div></div>';
+  } else {
+    bajaList.innerHTML = bajas.map(c => {
+      const v = c.visitas.find(v => {
+        const comm = (v['comments'] || '').toLowerCase();
+        return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+      });
+      return `<div class="alert-card">
+        <div class="alert-icon">🗑️</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · ${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'}</div>
+          <div class="alert-detail" style="color:#fbbf24;margin-top:4px">"${v['comments']}"</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="approveDelete('${c.codigo}')" style="background:#22c55e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Aprobar</button>
+          <button onclick="rejectDelete('${c.codigo}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rechazar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function approveDelete(codigo) {
+  if (confirm('¿Confirmar eliminación de cliente de seguimiento?')) {
+    alert('Marcado para eliminar. Acción debe confirmarse en el sheet.');
+  }
+}
+function rejectDelete(codigo) {
+  alert('Solicitud rechazada.');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  event.target.classList.add('active');
+  
+  // Filtro compartido: visible solo en mapa y lista
+  const sf = document.getElementById('shared-filter');
+  const sc = document.getElementById('shared-calugas');
+  const showShared = (name === 'map' || name === 'list');
+  if (sf) sf.style.display = showShared ? 'flex' : 'none';
+  if (sc) sc.style.display = showShared ? 'flex' : 'none';
+
+  if (name === 'map') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+    applySharedFilter(); // sync mapa con filtro actual
+  }
+  if (name === 'list') {
+    applySharedFilter(); // sync lista con filtro actual
+  }
+}
+
+// ============================================================
+// INIT + AUTO-REFRESH
+// ============================================================
+loadData();
+
+// Auto-refresh cada 5 minutos (300.000 ms) — 0 créditos, lee CSV directo
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
+setInterval(async () => {
+  // Solo refresca si la pestaña está visible
+  if (document.visibilityState === 'hidden') return;
+  await loadData(true);
+  // Mostrar brevemente el timestamp actualizado sin interrumpir al usuario
+}, AUTO_REFRESH_INTERVAL);
+
+// Contador regresivo en el botón de refresh
+let countdown = AUTO_REFRESH_INTERVAL / 1000;
+const refreshBtn = document.getElementById('refresh-btn');
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) countdown = AUTO_REFRESH_INTERVAL / 1000;
+  if (refreshBtn && !refreshBtn.disabled) {
+    const min = Math.floor(countdown / 60);
+    const sec = String(countdown % 60).padStart(2, '0');
+    refreshBtn.title = `Próximo refresco: ${min}:${sec}`;
+  }
+}, 1000);
+</script>
+</body>
+</html>
+  renderCalugas(clients);
+
+  // Table
+  const tbody = document.getElementById('list-body');
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
+    return;
+  }
+  
+  // Helper compartido para datos de fila
+  function clientRowData(c) {
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
+    const badgeClass = `badge badge-${st === 'nodata' ? 'gray' : st}`;
+    const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes}d` : '—';
+    const ticketStr = c.ticketPromedio > 0 ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : null;
+    const nuncaCompro = !c.ultimaCompra || c.ultimaCompra === '' || c.ultimaCompra.includes('1899');
+    const COLORS = {ok:'#3b82f6',green:'#22c55e',yellow:'#eab308',red:'#ef4444',critical:'#7f1d1d',nodata:'#94a3b8',noseg:'#94a3b8'};
+    return { st, badgeClass, diasStr, ticketStr, nuncaCompro, stColor: COLORS[st] || '#94a3b8' };
+  }
+
+  // Tabla desktop
+  tbody.innerHTML = clients.map(c => {
+    const { st, badgeClass, diasStr, ticketStr, nuncaCompro } = clientRowData(c);
+    const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
+    return `
+      <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
+        <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
+        <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
+        <td>${c.ultimaVisita || '—'}</td>
+        <td style="text-align:center">${c.diasSinContacto || '—'}</td>
+        <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td>${tStr}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
+            <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // Tarjetas móvil (estilo alert-card)
+  const isMobile = window.innerWidth < 700;
+  const tableWrap = document.querySelector('.table-wrap');
+  if (tableWrap) tableWrap.style.display = isMobile ? 'none' : '';
+  const cardsEl = document.getElementById('list-cards');
+  if (cardsEl) {
+    cardsEl.style.display = isMobile ? 'block' : 'none';
+    cardsEl.innerHTML = clients.map(c => {
+      const { st, badgeClass, diasStr, ticketStr, stColor } = clientRowData(c);
+      return `<div class="alert-card" style="border-left:3px solid ${stColor}">
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'}</div>
+          <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
+            <span class="${badgeClass}" style="font-size:11px">${diasStr} ${STATUS_LABELS[st]}</span>
+            <span style="font-size:11px;color:var(--text2)">📅 ${c.ultimaVisita || 'Sin visita'}</span>
+            <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
+            ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
+            ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
+          ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
+          <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// HISTORIAL MODAL
+// ============================================================
+function renderList() {
+  applySharedFilter();
+}
+
+function openHistorial(codigo) {
+  const c = allClientsMap[codigo];
+  if (!c) return;
+  
+  document.getElementById('modal-name').textContent = c.nombre;
+  document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
+  
+  // Visitas del cliente
+  const visitas = visitasData.filter(v => (v['client_code'] || v['client_id']) == codigo)
+    .sort((a,b) => {
+      const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
+      const db = parseDate(b['Fecha Visita'] || b['date']) || new Date(0);
+      return db - da;
+    });
+  
+  const ventas = visitas.filter(v => v['Visita/Venta'] === 'Venta');
+  const totalVentas = ventas.reduce((s, v) => s + (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0), 0);
+  const ticketProm = ventas.length ? totalVentas / ventas.length : 0;
+  
+  document.getElementById('modal-stats').innerHTML = `
+    <div class="modal-stat"><div class="modal-stat-val">${visitas.length}</div><div class="modal-stat-lbl">Total visitas</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${ventas.length}</div><div class="modal-stat-lbl">Compras</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(ticketProm).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Ticket promedio</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
+  `;
+  
+  // Chart historial
+  const last30 = visitas.slice(0, 30).reverse();
+  const labels = last30.map(v => v['Fecha Visita'] || '');
+  const montos = last30.map(v => v['Visita/Venta'] === 'Venta' ? (parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0) : 0);
+  
+  if (chartHist) chartHist.destroy();
+  const ctx = document.getElementById('chart-hist').getContext('2d');
+  chartHist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Venta neta',
+        data: montos,
+        backgroundColor: '#4f6ef7',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
+        y: { ticks: { color: '#6b7280', callback: v => '$' + v.toLocaleString('es-CL') }, grid: { color: '#e5e7eb' } }
+      }
+    }
+  });
+  
+  // Tabla
+  const tbody = document.getElementById('modal-hist-body');
+  // visitas ya viene ordenado desc por fecha; para calcular gap comparamos con la siguiente (más antigua)
+  const visitasSlice = visitas.slice(0, 50);
+  tbody.innerHTML = visitasSlice.map((v, i) => {
+    const monto = parseFloat(String(v['net_amount']).replace(/[^\d.-]/g,'')) || 0;
+    const tipo = v['Visita/Venta'] || 'Visita';
+    const color = tipo === 'Venta' ? '#16a34a' : '#9ca3af';
+    // Calcular días desde visita anterior (i+1 es la visita anterior porque está ordenado desc)
+    let diasGap = '—';
+    let gapColor = '#64748b';
+    const fechaActual = parseDate(v['Fecha Visita']);
+    const siguiente = visitasSlice[i + 1];
+    if (siguiente && fechaActual) {
+      const fechaAnterior = parseDate(siguiente['Fecha Visita']);
+      if (fechaAnterior && fechaActual > fechaAnterior) {
+        const diff = Math.round((fechaActual - fechaAnterior) / (1000*60*60*24));
+        diasGap = diff + 'd';
+        gapColor = diff <= 7 ? '#22c55e' : diff <= 14 ? '#3b82f6' : diff <= 21 ? '#eab308' : '#ef4444';
+      }
+    }
+    return `<tr>
+      <td style="white-space:nowrap">${v['Fecha Visita'] || '—'}</td>
+      <td style="text-align:center"><span style="font-weight:700;color:${gapColor};font-size:13px">${diasGap}</span></td>
+      <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
+      <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('modal').style.display = 'flex';
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').style.display = 'none';
+    if (chartHist) { chartHist.destroy(); chartHist = null; }
+  }
+}
+
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+
+// ============================================================
+// DASHBOARD HELPERS
+// ============================================================
+let dashPeriodo = 'hoy';
+
+function setPeriodo(btn) {
+  dashPeriodo = btn.dataset.periodo;
+  document.querySelectorAll('.periodo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customDiv = document.getElementById('dash-custom-dates');
+  if (customDiv) customDiv.style.display = dashPeriodo === 'custom' ? 'flex' : 'none';
+  renderDashboard();
+}
+
+let dashTab = 'resumen';
+function setDashTab(tab) {
+  dashTab = tab;
+  document.getElementById('dash-tab-resumen').classList.toggle('active', tab === 'resumen');
+  document.getElementById('dash-tab-detalle').classList.toggle('active', tab === 'detalle');
+  document.getElementById('dash-tabla-resumen').style.display = tab === 'resumen' ? 'block' : 'none';
+  document.getElementById('dash-tabla-detalle').style.display = tab === 'detalle' ? 'block' : 'none';
+  if (tab === 'detalle') renderDashDetalle();
+}
+
+let _detalleData = [];
+function renderDashDetalle() {
+  const tipo = (document.getElementById('dash-detalle-tipo') || {}).value || '';
+  const rows = tipo ? _detalleData.filter(v => v['Visita/Venta'] === tipo) : _detalleData;
+  const tbody = document.getElementById('dash-detalle-body');
+  const countEl = document.getElementById('dash-detalle-count');
+  if (countEl) countEl.textContent = '(' + rows.length + ' registros)';
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(v => {
+    const monto = parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0;
+    const dist = parseFloat(v['Distancia'] || '') || 0;
+    const esVenta = v['Visita/Venta'] === 'Venta';
+    const anomalia = dist > 2;
+    return `<tr style="border-bottom:1px solid var(--border);${anomalia?'background:rgba(220,38,38,0.04)':''}">
+      <td style="padding:6px">${v['Fecha Visita'] || ''}</td>
+      <td style="padding:6px;color:var(--text2)">${v['Hora'] || ''}</td>
+      <td style="padding:6px;font-weight:500">${v['client_name'] || '—'}</td>
+      <td style="padding:6px;color:var(--text2)">${v['salesman_name'] || '—'}</td>
+      <td style="padding:6px"><span style="background:${esVenta?'rgba(22,163,74,0.12)':'rgba(59,130,246,0.1)'};color:${esVenta?'#16a34a':'#2563eb'};border-radius:4px;padding:2px 6px;font-size:11px">${v['Visita/Venta'] || '—'}</span></td>
+      <td style="padding:6px;text-align:right;font-weight:600;color:${esVenta?'var(--accent)':'var(--text2)'}">${esVenta ? '$'+Math.round(monto).toLocaleString('es-CL') : '—'}</td>
+      <td style="padding:6px;text-align:right;color:${anomalia?'#dc2626':'var(--text2)'};font-weight:${anomalia?'700':'400'}">${dist > 0 ? dist.toFixed(1)+'km' : '—'}${anomalia?' ⚠️':''}</td>
+      <td style="padding:6px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(v.comments || '').replace(/[<>"]/g, ' ')}">${v['comments'] || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+}
+
+function resetDashDates() {
+  if (document.getElementById('dash-desde')) document.getElementById('dash-desde').value = '';
+  if (document.getElementById('dash-hasta')) document.getElementById('dash-hasta').value = '';
+  renderDashboard();
+}
+
+function parseDate(str) {
+  if (!str) return null;
+  // DD/MM/YYYY
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+  return new Date(str);
+}
+
+function renderDashboard() {
+  const vendedor = document.getElementById('dash-vendedor').value;
+  const comuna = document.getElementById('dash-comuna').value;
+  const search = document.getElementById('dash-search').value.toLowerCase();
+  const desde = document.getElementById('dash-desde').value ? new Date(document.getElementById('dash-desde').value) : null;
+  const hasta = document.getElementById('dash-hasta').value ? new Date(document.getElementById('dash-hasta').value) : null;
+  
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay() + 1); // lunes
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  
+  function parseMonto(v) { return parseFloat(String(v['net_amount'] || '').replace(/[^\d.-]/g,'')) || 0; }
+  
+  // Calcular rango de fechas según período seleccionado
+  let periodoDesde = null, periodoHasta = null;
+  if (dashPeriodo === 'hoy') {
+    periodoDesde = startOfDay; periodoHasta = null;
+  } else if (dashPeriodo === 'semana') {
+    periodoDesde = startOfWeek; periodoHasta = null;
+  } else if (dashPeriodo === 'mes') {
+    periodoDesde = startOfMonth; periodoHasta = null;
+  } else if (dashPeriodo === 'anio') {
+    periodoDesde = new Date(now.getFullYear(), 0, 1); periodoHasta = null;
+  } else if (dashPeriodo === 'custom') {
+    periodoDesde = desde; periodoHasta = hasta;
+  }
+
+  let todasVisitas = visitasData.filter(v => {
+    if (!parseMonto(v) && v['Visita/Venta'] !== 'Visita') return false;
+    if (vendedor && v['salesman_name'] !== vendedor) return false;
+    if (comuna && normalizeComuna(v['locality']) !== comuna) return false;
+    if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  // Visitas del período (incluye visitas y ventas para tabla detalle)
+  let visitasPeriodo = todasVisitas.filter(v => {
+    const fecha = parseDate(v['Fecha Visita']);
+    if (periodoDesde && fecha && fecha < periodoDesde) return false;
+    if (periodoHasta && fecha && fecha > periodoHasta) return false;
+    return true;
+  }).sort((a,b) => {
+    const fa = parseDate(a['Fecha Visita']), fb = parseDate(b['Fecha Visita']);
+    return (fb || 0) - (fa || 0);
+  });
+
+  // Solo ventas para cálculos de KPIs y charts
+  let ventasFiltradas = visitasPeriodo.filter(v => {
+    if (v['Visita/Venta'] !== 'Venta') return false;
+    if (!parseMonto(v)) return false;
+    return true;
+  });
+
+  // Guardar para tabla detalle
+  _detalleData = visitasPeriodo;
+
+  // KPIs siempre en base a períodos fijos - solo ventas con monto
+  const soloVentas = todasVisitas.filter(v => v['Visita/Venta'] === 'Venta' && parseMonto(v) > 0);
+  const totalDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalSemana = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfWeek; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  const totalMesAnterior = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= prevMonthStart && f <= prevMonthEnd; })
+    .reduce((s,v) => s + parseMonto(v), 0);
+  
+  // Pedidos y tickets
+  const pedidosDia = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfDay; }).length;
+  const pedidosMes = soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).length;
+  const ticketPromMes = pedidosMes ? Math.round(totalMes / pedidosMes) : 0;
+  
+  // Clientes únicos del mes
+  const clientesUnicos = new Set(soloVentas.filter(v => { const f = parseDate(v['Fecha Visita']); return f && f >= startOfMonth; }).map(v => v['client_code'] || v['client_name']));
+  
+  // Días hábiles reales (L-V) — contar exactamente desde el 1ro del mes hasta hoy
+  function contarDiasHabilesEnMes(desde, hasta) {
+    // desde: Date primer día del mes, hasta: Date hoy (inclusive)
+    let count = 0;
+    const d = new Date(desde);
+    while (d <= hasta) {
+      const dow = d.getDay(); // 0=Dom, 6=Sab
+      if (dow !== 0 && dow !== 6) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return count;
+  }
+  function contarDiasHabilesTotalesMes(anio, mes) {
+    // Total días hábiles del mes completo
+    const primerDia = new Date(anio, mes, 1);
+    const ultimoDia = new Date(anio, mes + 1, 0); // último día del mes
+    return contarDiasHabilesEnMes(primerDia, ultimoDia);
+  }
+
+  const hoy = startOfDay;
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const diasHabilesTranscurridos = contarDiasHabilesEnMes(primerDiaMes, hoy);
+  const diasHabilesTotalesMes = contarDiasHabilesTotalesMes(hoy.getFullYear(), hoy.getMonth());
+  const diasHabilesRestantes = diasHabilesTotalesMes - diasHabilesTranscurridos;
+
+  // Meta basada en META_DIARIA = $2.000.000 por día hábil
+  const metaDia = META_DIARIA;
+  const metaSemana = META_DIARIA * 5;
+  const metaMes = META_DIARIA * diasHabilesTotalesMes; // meta total del mes
+  const metaMesTranscurrido = META_DIARIA * diasHabilesTranscurridos; // meta acumulada hasta hoy
+  const proyeccion = diasHabilesTranscurridos > 0
+    ? Math.round(totalMes / diasHabilesTranscurridos * diasHabilesTotalesMes)
+    : 0;
+
+  // Variación mes vs mes anterior
+  const varPct = totalMesAnterior > 0 ? Math.round((totalMes - totalMesAnterior) / totalMesAnterior * 100) : null;
+  
+  function pct(v, m) { return m > 0 ? Math.round(v/m*100) : 0; }
+  function metaStr(v, m) {
+    const p = pct(v,m);
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#ca8a04' : '#dc2626';
+    const icon = p >= 100 ? '✅' : p >= 70 ? '⚠️' : '🔴';
+    return `<span style="color:${color};font-size:11px;font-weight:600">${icon} ${p}% de meta ($${Math.round(m).toLocaleString('es-CL')})</span>`;
+  }
+  function bar(v, m) {
+    const p = Math.min(100, pct(v,m));
+    const color = p >= 100 ? '#16a34a' : p >= 70 ? '#eab308' : '#ef4444';
+    return `<div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${color}"></div></div>`;
+  }
+  function varStr(v) {
+    if (v === null) return '';
+    return `<span style="color:${v>=0?'#16a34a':'#dc2626'};font-size:11px">${v>=0?'+':''}${v}% vs mes ant.</span>`;
+  }
+
+  // Texto descriptivo de la meta
+  const metaDiaFmt = '$' + Math.round(metaDia).toLocaleString('es-CL');
+  const metaMesTransFmt = '$' + Math.round(metaMesTranscurrido).toLocaleString('es-CL');
+
+  document.getElementById('dash-calugas').innerHTML = `
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta hoy</div>
+      <div class="dash-caluga-num">$${Math.round(totalDia).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${pedidosDia} pedidos · meta ${metaDiaFmt}</div>
+      ${metaStr(totalDia, metaDia)}
+      ${bar(totalDia, metaDia)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta semana</div>
+      <div class="dash-caluga-num">$${Math.round(totalSemana).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">L-V · meta $${Math.round(metaSemana).toLocaleString('es-CL')}</div>
+      ${metaStr(totalSemana, metaSemana)}
+      ${bar(totalSemana, metaSemana)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Venta mes</div>
+      <div class="dash-caluga-num">$${Math.round(totalMes).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)} · meta al día: ${metaMesTransFmt}</div>
+      ${metaStr(totalMes, metaMesTranscurrido)}
+      ${bar(totalMes, metaMesTranscurrido)}
+    </div>
+    <div class="dash-caluga">
+      <div class="dash-caluga-label">Proyección mes</div>
+      <div class="dash-caluga-num">$${proyeccion.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${diasHabilesRestantes} días hábiles restantes · meta $${metaMes.toLocaleString('es-CL')}</div>
+      ${metaStr(proyeccion, metaMes)}
+      ${bar(proyeccion, metaMes)}
+    </div>
+  `;
+
+  document.getElementById('dash-calugas2').innerHTML = `
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Pedidos mes</div>
+      <div class="dash-caluga-num" style="font-size:24px">${pedidosMes}</div>
+      <div style="font-size:11px;color:var(--text2)">Ventas únicas</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Ticket promedio</div>
+      <div class="dash-caluga-num" style="font-size:22px">$${ticketPromMes.toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">Este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Clientes activos</div>
+      <div class="dash-caluga-num" style="font-size:24px">${clientesUnicos.size}</div>
+      <div style="font-size:11px;color:var(--text2)">Compraron este mes</div>
+    </div>
+    <div class="dash-caluga" style="min-width:140px">
+      <div class="dash-caluga-label">Mes anterior</div>
+      <div class="dash-caluga-num" style="font-size:20px">$${Math.round(totalMesAnterior).toLocaleString('es-CL')}</div>
+      <div style="font-size:11px;color:var(--text2)">${varStr(varPct)}</div>
+    </div>
+  `;
+  
+  // Chart: últimos 30 días
+  const last30days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(startOfDay); d.setDate(d.getDate() - i);
+    last30days.push(d);
+  }
+  const dailyMap = {};
+  ventasFiltradas.forEach(v => {
+    const f = parseDate(v['Fecha Visita']);
+    if (!f) return;
+    const key = `${f.getDate()}/${f.getMonth()+1}`;
+    dailyMap[key] = (dailyMap[key] || 0) + parseMonto(v);
+  });
+  const chartLabels = last30days.map(d => `${d.getDate()}/${d.getMonth()+1}`);
+  const chartData = chartLabels.map(k => dailyMap[k] || 0);
+  const metaDiaLine = Array(30).fill(metaDia);
+  
+  // Charts desactivados (canvas ocultos, no se necesitan)
+  // Top 10 clientes
+  const clientMap = {};
+  const clientData = {};
+  ventasFiltradas.forEach(v => {
+    const n = v['client_name'] || '—';
+    const loc = normalizeComuna(v['locality'] || '');
+    if (!clientMap[n]) { clientMap[n] = 0; clientData[n] = { loc, count: 0 }; }
+    clientMap[n] += parseMonto(v);
+    clientData[n].count++;
+  });
+  const top10 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const top20 = Object.entries(clientMap).sort((a,b) => b[1]-a[1]).slice(0,20);
+  
+  // Chart vendedores
+  const vendMap = {};
+  ventasFiltradas.forEach(v => {
+    const vend = v['salesman_name'] || 'Otro';
+    vendMap[vend] = (vendMap[vend] || 0) + parseMonto(v);
+  });
+  const vendEntries = Object.entries(vendMap).sort((a,b) => b[1]-a[1]);
+  const COLORS_VEND = ['#4f6ef7','#7c3aed','#16a34a','#ea580c','#0891b2','#db2777'];
+  
+  // Si está en tab detalle, actualizar tabla detalle
+  if (dashTab === 'detalle') renderDashDetalle();
+
+  // Tabla top 20
+  const tbody = document.getElementById('dash-tabla-body');
+  if (tbody) {
+    tbody.innerHTML = top20.map(([nombre, total], i) => {
+      const d = clientData[nombre] || {};
+      const ticket = d.count ? Math.round(total / d.count) : 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${i+1}</td>
+        <td style="padding:7px 6px;font-weight:500;font-size:13px">${nombre}</td>
+        <td style="padding:7px 6px;color:var(--text2);font-size:12px">${d.loc || '—'}</td>
+        <td style="padding:7px 6px;text-align:right;font-size:12px">${d.count}</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:600;color:var(--accent)">${'$'+Math.round(total).toLocaleString('es-CL')}</td>
+        <td style="padding:7px 6px;text-align:right;color:var(--text2);font-size:12px">$${ticket.toLocaleString('es-CL')}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+function renderAdmin() {
+  const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
+  const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
+  const gpsDesdeEl = document.getElementById('gps-desde');
+  const gpsHastaEl = document.getElementById('gps-hasta');
+  const gpsDesde = gpsDesdeEl && gpsDesdeEl.value ? new Date(gpsDesdeEl.value) : null;
+  const gpsHasta = gpsHastaEl && gpsHastaEl.value ? new Date(gpsHastaEl.value) : null;
+
+  // Poblar select de vendedores en GPS si está vacío
+  const gpsVendSel = document.getElementById('gps-vendedor');
+  if (gpsVendSel && gpsVendSel.options.length <= 1) {
+    const vends = [...new Set(visitasData.map(v => v['salesman_name']).filter(Boolean))].sort();
+    vends.forEach(v => { const o = new Option(v,v); gpsVendSel.add(o); });
+  }
+  
+  // GPS anomalías con filtros
+  const anomalias = visitasData.filter(v => {
+    const dist = parseFloat(v['Distancia']);
+    if (isNaN(dist) || dist <= threshold) return false;
+    if (gpsVendedor && v['salesman_name'] !== gpsVendedor) return false;
+    const f = parseDate(v['Fecha Visita']);
+    if (gpsDesde && f && f < gpsDesde) return false;
+    if (gpsHasta && f && f > gpsHasta) return false;
+    return true;
+  }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
+  
+  document.getElementById('gps-count').textContent = anomalias.length;
+  
+  const gpsList = document.getElementById('gps-list');
+  if (!anomalias.length) {
+    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
+  } else {
+    gpsList.innerHTML = anomalias.slice(0, 50).map(v => `
+      <div class="alert-card">
+        <div class="alert-icon">📍</div>
+        <div class="alert-info">
+          <div class="alert-name">${v['client_name'] || '—'}</div>
+          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${normalizeComuna(v['locality'] || '')}</div>
+        </div>
+        <span class="alert-badge" style="background:rgba(220,38,38,0.15);color:#dc2626;font-weight:600">${parseFloat(v['Distancia']).toFixed(1)} km</span>
+      </div>
+    `).join('');
+  }
+  
+  // Solicitudes de baja (por comentario con "eliminar" o "baja")
+  const bajas = Object.values(allClientsMap).filter(c => {
+    const comment = (c.visitas.find(v => {
+      const comm = (v['comments'] || '').toLowerCase();
+      return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+    }));
+    return !!comment;
+  });
+  
+  document.getElementById('baja-count').textContent = bajas.length;
+  const bajaList = document.getElementById('baja-list');
+  if (!bajas.length) {
+    bajaList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin solicitudes de baja</div></div>';
+  } else {
+    bajaList.innerHTML = bajas.map(c => {
+      const v = c.visitas.find(v => {
+        const comm = (v['comments'] || '').toLowerCase();
+        return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
+      });
+      return `<div class="alert-card">
+        <div class="alert-icon">🗑️</div>
+        <div class="alert-info">
+          <div class="alert-name">${c.nombre}</div>
+          <div class="alert-detail">${c.comuna} · ${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'}</div>
+          <div class="alert-detail" style="color:#fbbf24;margin-top:4px">"${v['comments']}"</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="approveDelete('${c.codigo}')" style="background:#22c55e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Aprobar</button>
+          <button onclick="rejectDelete('${c.codigo}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rechazar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function approveDelete(codigo) {
+  if (confirm('¿Confirmar eliminación de cliente de seguimiento?')) {
+    alert('Marcado para eliminar. Acción debe confirmarse en el sheet.');
+  }
+}
+function rejectDelete(codigo) {
+  alert('Solicitud rechazada.');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  event.target.classList.add('active');
+  
+  // Filtro compartido: visible solo en mapa y lista
+  const sf = document.getElementById('shared-filter');
+  const sc = document.getElementById('shared-calugas');
+  const showShared = (name === 'map' || name === 'list');
+  if (sf) sf.style.display = showShared ? 'flex' : 'none';
+  if (sc) sc.style.display = showShared ? 'flex' : 'none';
+
+  if (name === 'map') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+    applySharedFilter(); // sync mapa con filtro actual
+  }
+  if (name === 'list') {
+    applySharedFilter(); // sync lista con filtro actual
+  }
+}
+
+// ============================================================
+// INIT + AUTO-REFRESH
+// ============================================================
+loadData();
+
+// Auto-refresh cada 5 minutos (300.000 ms) — 0 créditos, lee CSV directo
+const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
+setInterval(async () => {
+  // Solo refresca si la pestaña está visible
+  if (document.visibilityState === 'hidden') return;
+  await loadData(true);
+  // Mostrar brevemente el timestamp actualizado sin interrumpir al usuario
+}, AUTO_REFRESH_INTERVAL);
+
+// Contador regresivo en el botón de refresh
+let countdown = AUTO_REFRESH_INTERVAL / 1000;
+const refreshBtn = document.getElementById('refresh-btn');
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) countdown = AUTO_REFRESH_INTERVAL / 1000;
+  if (refreshBtn && !refreshBtn.disabled) {
+    const min = Math.floor(countdown / 60);
+    const sec = String(countdown % 60).padStart(2, '0');
+    refreshBtn.title = `Próximo refresco: ${min}:${sec}`;
+  }
+}, 1000);
+</script>
+</body>
+</html>
   renderCalugas(clients);
 
   // Table
