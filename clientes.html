@@ -744,6 +744,47 @@ const STATUS_LABELS = {
 let rutasData = []; // Todos los clientes del borrador de rutas
 
 
+
+// Pre-computa métricas de visitas por cliente (correr una vez al cargar datos)
+function precomputeClientMetrics() {
+  if (!visitasData || !visitasData.length) return;
+  
+  // Índice por nombre normalizado
+  const visByName = {};
+  visitasData.forEach(v => {
+    const nm = normName(v['client_name']);
+    if (!visByName[nm]) visByName[nm] = [];
+    visByName[nm].push(v);
+  });
+  // Índice por code
+  const visByCode = {};
+  visitasData.forEach(v => {
+    const cd = String(v['client_code'] || v['client_id'] || '').trim();
+    if (cd) {
+      if (!visByCode[cd]) visByCode[cd] = [];
+      visByCode[cd].push(v);
+    }
+  });
+  
+  Object.values(allClientsMap).forEach(c => {
+    const nm = normName(c.nombre);
+    const visitas = (visByName[nm] || visByCode[c.codigo] || [])
+      .sort((a,b) => (parseDate(b['Fecha Visita'])||new Date(0)) - (parseDate(a['Fecha Visita'])||new Date(0)));
+    
+    // Último tipo de visita
+    c._ultimoTipoVisita = visitas.length ? (visitas[0]['Visita/Venta'] || '') : '';
+    
+    // N visitas consecutivas sin venta (desde la más reciente hacia atrás)
+    let consec = 0;
+    for (let i = 0; i < visitas.length; i++) {
+      if ((visitas[i]['Visita/Venta'] || '') !== 'Venta') consec++;
+      else break;
+    }
+    c._visitasConsecSinVenta = consec;
+    c._totalVisitas = visitas.length;
+  });
+}
+
 function toggleFilters() {
   const panel = document.getElementById('shared-filter');
   const arrow = document.getElementById('filter-arrow');
@@ -785,6 +826,7 @@ async function loadData(force = false) {
     });
     
     buildAllClientsMap();
+    precomputeClientMetrics();
     initFilters();
     initMap();
     renderMapMarkers();
@@ -1087,20 +1129,8 @@ function getSharedFilters() {
 
 function getFilteredClients(filters) {
   const f = filters || getSharedFilters();
-  // Pre-calc sin-venta set si hace falta
-  let sinVentaSet = null;
-  if (f.minVSV > 0 && visitasData) {
-    sinVentaSet = new Set();
-    Object.values(allClientsMap).filter(c => c.enSeguimiento).forEach(c => {
-      const vis = visitasData
-        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
-        .sort((a,b) => (parseDate(b['Fecha Visita'])||0) - (parseDate(a['Fecha Visita'])||0))
-        .slice(0, f.minVSV);
-      if (vis.length >= f.minVSV && vis.every(v => (v['Visita/Venta']||'') !== 'Venta')) {
-        sinVentaSet.add(c.codigo);
-      }
-    });
-  }
+  // Usa métricas pre-computadas (rápido, O(1) por cliente)
+  const sinVentaSet = null; // no se usa, usamos c._visitasConsecSinVenta directamente
   return Object.values(allClientsMap).filter(c => {
     if (!c.enSeguimiento) return false;
     if (f.search && !c.nombre.toLowerCase().includes(f.search) && !c.codigo.toLowerCase().includes(f.search)) return false;
@@ -1110,7 +1140,7 @@ function getFilteredClients(filters) {
     if (f.status && st !== f.status) return false;
     if (f.minTicket > 0 && (c.ticketPromedio||0) < f.minTicket) return false;
     if (f.minDias > 0 && (parseFloat(c.diasSinContacto)||0) < f.minDias) return false;
-    if (sinVentaSet !== null && !sinVentaSet.has(c.codigo)) return false;
+    if (f.minVSV > 0 && (c._visitasConsecSinVenta || 0) < f.minVSV) return false;
     return true;
   });
 }
@@ -1148,16 +1178,8 @@ function renderCalugas(clients) {
     ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
     : 0;
   const pctAlerta = clients.length ? Math.round(((counts.yellow+counts.red+counts.critical)/clients.length)*100) : 0;
-  // Visitas sin venta: contar clientes donde la última visita NO fue venta
-  let visitasSinVenta = 0;
-  if (visitasData && visitasData.length) {
-    clients.forEach(c => {
-      const ultVis = (visitasData)
-        .filter(v => String(v['client_code'] || v['client_id'] || '').trim() === c.codigo)
-        .sort((a,b) => new Date(b['Fecha Visita']||0) - new Date(a['Fecha Visita']||0))[0];
-      if (ultVis && (ultVis['Visita/Venta']||'') !== 'Venta') visitasSinVenta++;
-    });
-  }
+  // Visitas sin venta: usa métricas pre-computadas (O(n) simple)
+  const visitasSinVenta = clients.filter(c => c._ultimoTipoVisita && c._ultimoTipoVisita !== 'Venta').length;
   // Ventas estimadas perdidas: suma ticket de clientes atrasados
   const ventasPerdidas = clients
     .filter(c => { const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento); return st === 'yellow' || st === 'red' || st === 'critical'; })
