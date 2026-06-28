@@ -690,6 +690,12 @@
 </div>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+  console.error('[GLOBAL ERROR]', msg, 'line:', line, 'stack:', err && err.stack);
+  document.title = 'ERR L' + line + ': ' + msg;
+};
+</script>
+<script>
 // ============================================================
 // CONFIG
 // ============================================================
@@ -1612,11 +1618,17 @@ function parseDate(str) {
 }
 
 function renderDashboard() {
-  const vendedor = document.getElementById('dash-vendedor').value;
-  const comuna = document.getElementById('dash-comuna').value;
-  const search = document.getElementById('dash-search').value.toLowerCase();
-  const desde = document.getElementById('dash-desde').value ? new Date(document.getElementById('dash-desde').value) : null;
-  const hasta = document.getElementById('dash-hasta').value ? new Date(document.getElementById('dash-hasta').value) : null;
+  const _dvEl = document.getElementById('dash-vendedor');
+  const _dcEl = document.getElementById('dash-comuna');
+  const _dsEl = document.getElementById('dash-search');
+  const _ddEl = document.getElementById('dash-desde');
+  const _dhEl = document.getElementById('dash-hasta');
+  if (!_dvEl || !_dcEl) return; // elementos del dashboard aún no en DOM
+  const vendedor = _dvEl.value;
+  const comuna = _dcEl.value;
+  const search = (_dsEl ? _dsEl.value : '').toLowerCase();
+  const desde = _ddEl && _ddEl.value ? new Date(_ddEl.value) : null;
+  const hasta = _dhEl && _dhEl.value ? new Date(_dhEl.value) : null;
   
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
