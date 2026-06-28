@@ -880,6 +880,7 @@ async function loadData(force = false) {
     initFilters();
     initMap();
     renderMapMarkers();
+    renderAdmin(); // inicializar vista admin con datos
     // Ajustar max del slider al ticket máximo real del dataset
     const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
     const maxSlider = Math.ceil(maxTick / 10000) * 10000;
@@ -1897,6 +1898,14 @@ function renderDashboard() {
 // ============================================================
 // ADMIN
 // ============================================================
+// Abrir historial buscando por nombre normalizado
+function openHistorialByName(nombre) {
+  if (!nombre) return;
+  const nm = normName(nombre);
+  const cliente = Object.values(allClientsMap).find(c => normName(c.nombre) === nm);
+  if (cliente) openHistorial(cliente.codigo);
+}
+
 function renderAdmin() {
   const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
   const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
@@ -1929,16 +1938,33 @@ function renderAdmin() {
   if (!anomalias.length) {
     gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
   } else {
-    gpsList.innerHTML = anomalias.slice(0, 50).map(v => `
-      <div class="alert-card">
-        <div class="alert-icon">📍</div>
-        <div class="alert-info">
-          <div class="alert-name">${v['client_name'] || '—'}</div>
-          <div class="alert-detail">${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'} · ${normalizeComuna(v['locality'] || '')}</div>
-        </div>
-        <span class="alert-badge" style="background:rgba(220,38,38,0.15);color:#dc2626;font-weight:600">${parseFloat(v['Distancia']).toFixed(1)} km</span>
-      </div>
-    `).join('');
+    gpsList.innerHTML = anomalias.slice(0, 50).map(function(v) {
+      var latV = parseFloat(v['lat_visita'] || v['Lat Visita'] || '');
+      var lngV = parseFloat(v['lng_visita'] || v['Lng Visita'] || '');
+      var latC = parseFloat(v['lat_cliente'] || v['address_latitude'] || '');
+      var lngC = parseFloat(v['lng_cliente'] || v['address_longitude'] || '');
+      var mapsVisita = (!isNaN(latV) && !isNaN(lngV)) ? 'https://www.google.com/maps?q=' + latV + ',' + lngV : '';
+      var mapsCliente = (!isNaN(latC) && !isNaN(lngC)) ? 'https://www.google.com/maps?q=' + latC + ',' + lngC : '';
+      var dist = parseFloat(v['Distancia']).toFixed(1);
+      var clientNombre = (v['client_name'] || '').replace(/'/g, "\'");
+      var pinsHtml = '';
+      if (mapsVisita) pinsHtml += '<a href="' + mapsVisita + '" target="_blank" title="Dónde marcó la visita" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;text-decoration:none;color:var(--text)">📍</a>';
+      if (mapsCliente) pinsHtml += '<a href="' + mapsCliente + '" target="_blank" title="Domicilio del cliente" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;text-decoration:none;color:var(--text)">🏪</a>';
+      pinsHtml += '<button onclick="openHistorialByName(\'' + clientNombre + '\')" title="Ver historial" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;color:var(--text)">📋</button>';
+      return '<div class="client-card" style="margin-bottom:8px;border-left:4px solid #dc2626">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:600;font-size:14px;color:var(--text);margin-bottom:2px">' + (v['client_name'] || '—') + '</div>' +
+            '<div style="font-size:11px;color:var(--text2)">' + normalizeComuna(v['locality'] || '') + ' · ' + (v['salesman_name'] || '—') + '</div>' +
+            '<div style="font-size:11px;color:var(--text2);margin-top:2px">📅 ' + (v['Fecha Visita'] || '—') + ' · ' + (v['Visita/Venta'] || '—') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">' +
+            '<span style="background:rgba(220,38,38,0.12);color:#dc2626;font-weight:700;font-size:13px;padding:3px 8px;border-radius:6px">' + dist + ' km</span>' +
+            '<div style="display:flex;gap:5px">' + pinsHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   }
   
   // Solicitudes de baja (por comentario con "eliminar" o "baja")
@@ -2010,6 +2036,9 @@ function showView(name, evt) {
   }
   if (name === 'list') {
     applySharedFilter(); // sync lista con filtro actual
+  }
+  if (name === 'admin') {
+    renderAdmin();
   }
 }
 
