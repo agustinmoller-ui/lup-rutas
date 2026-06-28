@@ -555,20 +555,20 @@
 
   <!-- ===== LIST VIEW ===== -->
   <div class="view" id="view-list">
+    <!-- Barra de exportación — siempre visible arriba -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+      <span id="list-count-label" style="font-size:12px;color:var(--text2)">— clientes</span>
+      <div style="display:flex;gap:6px">
+        <button onclick="exportExcel()" style="display:flex;align-items:center;gap:4px;background:#16a34a;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">
+          📊 Excel
+        </button>
+        <button onclick="exportPDF()" style="display:flex;align-items:center;gap:4px;background:#dc2626;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">
+          📄 PDF
+        </button>
+      </div>
+    </div>
     <div class="list-view-inner">
       <div id="list-cards"></div>
-      <!-- Barra de exportación -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
-        <span id="list-count-label" style="font-size:12px;color:var(--text2)">— clientes</span>
-        <div style="display:flex;gap:6px">
-          <button onclick="exportExcel()" style="display:flex;align-items:center;gap:4px;background:#16a34a;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">
-            📊 Excel
-          </button>
-          <button onclick="exportPDF()" style="display:flex;align-items:center;gap:4px;background:#dc2626;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit">
-            📄 PDF
-          </button>
-        </div>
-      </div>
       <div class="table-wrap">
         <table id="main-table">
           <thead>
