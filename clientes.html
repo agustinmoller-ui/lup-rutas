@@ -444,8 +444,7 @@
 
   <!-- ===== FILTRO COMPARTIDO (Mapa + Lista) ===== -->
   <!-- Panel de filtros fijo (sin toggle para evitar colapso accidental) -->
-  <!-- DEBUG banner temporal - borrar luego -->
-  <div id="debug-banner" style="background:#1e293b;color:#fbbf24;font-size:10px;padding:2px 8px;font-family:monospace;display:block"></div>
+
   <div style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
     <div id="filter-toggle-bar" style="display:none"></div>
     <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
@@ -1191,8 +1190,7 @@ function getFilteredClients(filters) {
   const f = filters || getSharedFilters();
   // Usa métricas pre-computadas (rápido, O(1) por cliente)
   const sinVentaSet = null; // no se usa, usamos c._visitasConsecSinVenta directamente
-  const all = Object.values(allClientsMap);
-  const result = all.filter(c => {
+  const result = Object.values(allClientsMap).filter(c => {
     if (!c.enSeguimiento) return false;
     if (f.search && !c.nombre.toLowerCase().includes(f.search) && !c.codigo.toLowerCase().includes(f.search)) return false;
     if (f.comuna && c.comuna !== f.comuna) return false;
@@ -1204,13 +1202,6 @@ function getFilteredClients(filters) {
     if (f.minVSV > 0 && ((c._totalVisitas||0) === 0 || (c._visitasConsecSinVenta || 0) < f.minVSV)) return false;
     return true;
   });
-  // Debug completo
-  const dbg2 = document.getElementById('debug-banner');
-  if (dbg2) {
-    const seg = all.filter(c=>c.enSeguimiento);
-    const sample = seg.slice(0,2).map(c => `${c.nombre.slice(0,12)}:df=${c.diasFaltantes}(${typeof c.diasFaltantes}):st=${getStatusFromDias(c.diasFaltantes,c.enSeguimiento)}`);
-    dbg2.textContent += ` | result=${result.length}/${seg.length} | f.status="${f.status}" | ${sample.join(' | ')}`;
-  }
   return result;
 }
 
@@ -1224,11 +1215,7 @@ function applySharedFilter() {
   const filters = getSharedFilters();
   const clients = getFilteredClients(filters);
   window._lastFilteredClients = clients;
-  // Debug banner temporal
-  const dbg = document.getElementById('debug-banner');
-  if (dbg) dbg.textContent = `Filtro → ${clients.length} clientes | Estado:${filters.status||'todos'} | Vend:${filters.vendedor||'todos'} | Días:${filters.minDias}`;
   renderSharedCalugas(clients);
-  // Siempre renderizar ambas vistas para evitar problemas de detección
   renderMapMarkersFromClients(clients);
   renderListFromClients(clients);
 }
@@ -2249,9 +2236,7 @@ function exportPDF() {
   doc.save('LUP_Clientes_' + now.toISOString().slice(0,10) + '.pdf');
 }
 
-function getFilteredClients() {
-  return window._lastFilteredClients || Object.values(allClientsMap).filter(c => c.enSeguimiento);
-}
+// (getFilteredClients eliminado — definición única arriba)
 </script>
 </body>
 </html>
