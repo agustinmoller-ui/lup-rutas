@@ -660,38 +660,7 @@
     </div>
   </div>
 
-  <!-- ===== ADMIN VIEW ===== -->
-  <div class="view" id="view-admin">
-    <div class="admin-inner">
-      <!-- GPS anomalías -->
-      <div class="section-title">
-        📍 Visitas con distancia anómala
-        <span class="section-badge" id="gps-count">0</span>
-      </div>
-      <div class="filter-bar" style="padding:8px 0">
-        <span class="config-label" style="white-space:nowrap">Más de</span>
-        <input type="number" class="config-input" id="gps-threshold" value="2" min="0.1" step="0.1" onchange="renderAdmin()" style="width:70px">
-        <span class="config-label">km</span>
-        <select id="gps-vendedor" onchange="renderAdmin()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:6px 8px;font-size:13px"><option value="">Todos los vendedores</option></select>
-        <input type="date" id="gps-desde" onchange="renderAdmin()" title="Desde">
-        <input type="date" id="gps-hasta" onchange="renderAdmin()" title="Hasta">
-        <button onclick="document.getElementById('gps-desde').value='';document.getElementById('gps-hasta').value='';renderAdmin();" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px">Limpiar</button>
-      </div>
-      <div id="gps-list"></div>
-
-      <div style="height:32px"></div>
-
-      <!-- Solicitudes de baja -->
-      <div class="section-title">
-        🗑️ Solicitudes de baja
-        <span class="section-badge" id="baja-count">0</span>
-      </div>
-      <div id="baja-list"></div>
-    </div>
-  </div>
-
-</div>
-
+  
 <!-- HISTORIAL MODAL -->
 <div class="modal-overlay" id="modal" style="display:none;visibility:hidden;pointer-events:none" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -2023,22 +1992,28 @@ function showView(name, evt) {
   if (evt && evt.currentTarget) {
     evt.currentTarget.classList.add('active');
     // Si es dashboard o admin, resaltar el botón del nav-right
-    if (name === 'dashboard' || name === 'admin') {
+    if (name === 'dashboard') {
       evt.currentTarget.style.background = 'var(--ac)';
     }
   }
   
-  // Filtros SIEMPRE visibles — nunca ocultar por cambio de vista
+  // Mostrar/ocultar filtros compartidos según vista
+  const sf = document.getElementById('shared-filter');
+  const sfSearch = document.getElementById('shared-search');
+  if (sf) {
+    if (name === 'dashboard') {
+      sf.style.display = 'none';
+    } else {
+      sf.style.display = 'flex';
+    }
+  }
 
   if (name === 'map') {
     setTimeout(() => { if (map) map.invalidateSize(); }, 100);
-    applySharedFilter(); // sync mapa con filtro actual
+    applySharedFilter();
   }
   if (name === 'list') {
-    applySharedFilter(); // sync lista con filtro actual
-  }
-  if (name === 'admin') {
-    renderAdmin();
+    applySharedFilter();
   }
 }
 
