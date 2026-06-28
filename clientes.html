@@ -690,12 +690,6 @@
 </div>
 
 <script>
-window.onerror = function(msg, src, line, col, err) {
-  console.error('[GLOBAL ERROR]', msg, 'line:', line, 'stack:', err && err.stack);
-  document.title = 'ERR L' + line + ': ' + msg;
-};
-</script>
-<script>
 // ============================================================
 // CONFIG
 // ============================================================
@@ -850,15 +844,10 @@ async function loadData(force = false) {
       }
     });
     
-    console.log('[LUP] buildAllClientsMap...');
     buildAllClientsMap();
-    console.log('[LUP] precomputeClientMetrics...');
     precomputeClientMetrics();
-    console.log('[LUP] initFilters...');
     initFilters();
-    console.log('[LUP] initMap...');
     initMap();
-    console.log('[LUP] renderMapMarkers...');
     renderMapMarkers();
     // Ajustar max del slider al ticket máximo real del dataset
     const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
@@ -867,11 +856,8 @@ async function loadData(force = false) {
       const el = document.getElementById(id);
       if (el && maxTick > 0) el.max = maxSlider;
     });
-    console.log('[LUP] renderList...');
     renderList();
-    console.log('[LUP] renderDashboard...');
     renderDashboard();
-    console.log('[LUP] DONE');
     
     document.getElementById('loading').style.display = 'none';
     const upd = document.getElementById('last-update');
