@@ -560,12 +560,8 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
       <span id="list-count-label" style="font-size:12px;color:var(--text2)">— clientes</span>
       <div style="display:flex;gap:6px">
-        <button onclick="exportExcel()" style="display:flex;align-items:center;gap:4px;background:#16a34a;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">
-          📊 Excel
-        </button>
-        <button onclick="exportPDF()" style="display:flex;align-items:center;gap:4px;background:#dc2626;color:white;border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600">
-          📄 PDF
-        </button>
+        <button onclick="exportExcel()" title="Descargar Excel" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:4px 8px;font-size:13px;cursor:pointer;line-height:1">📊</button>
+        <button onclick="exportPDF()" title="Descargar PDF" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:4px 8px;font-size:13px;cursor:pointer;line-height:1">📄</button>
       </div>
     </div>
     <div class="list-view-inner">
@@ -1257,6 +1253,8 @@ function renderCalugas(clients) {
       <span style="font-size:8px;color:var(--text2);white-space:nowrap">${bottom}</span>
     </div>`;
   calugas.innerHTML =
+    chip(clients.length,'Total','#94a3b8') +
+    '<div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:2px 3px"></div>' +
     chip(counts.ok,'OK','#3b82f6') +
     chip(counts.green,'Verde','#22c55e') +
     chip(counts.yellow,'Amar.','#eab308') +
@@ -1268,8 +1266,7 @@ function renderCalugas(clients) {
     chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
     chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
     chipWide('🚫 '+visitasSinVenta+' últ.vis.', 'sin compra', '#ef4444') +
-    chipWide('💸 $'+(ventasPerdidas>=1000000 ? (ventasPerdidas/1000000).toFixed(1).replace('.',',')+'MM' : Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K'), 'ventas perdidas est.', '#dc2626') +
-    chip(clients.length,'Total','#94a3b8');
+    chipWide('💸 $'+(ventasPerdidas>=1000000 ? (ventasPerdidas/1000000).toFixed(1).replace('.',',')+'MM' : Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K'), 'ventas perdidas est.', '#dc2626');
   
 }
 
@@ -2047,7 +2044,7 @@ setInterval(() => {
 // EXPORTACIÓN EXCEL
 // =============================================
 function exportExcel() {
-  const clients = getFilteredClients();
+  const clients = window._lastFilteredClients || getFilteredClients(getSharedFilters());
   const f = getSharedFilters();
   const now = new Date();
   const fechaStr = now.toLocaleDateString('es-CL') + ' ' + now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
@@ -2068,7 +2065,7 @@ function exportExcel() {
 
   // Datos de la tabla
   const rows = clients.map(c => {
-    const st = calcStatus(c.diasFaltantes, c.enSeguimiento);
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
     return [
       c.nombre || '',
@@ -2134,7 +2131,7 @@ function exportExcel() {
 // EXPORTACIÓN PDF
 // =============================================
 function exportPDF() {
-  const clients = getFilteredClients();
+  const clients = window._lastFilteredClients || getFilteredClients(getSharedFilters());
   const f = getSharedFilters();
   const now = new Date();
   const fechaStr = now.toLocaleDateString('es-CL') + ' ' + now.toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
@@ -2170,7 +2167,7 @@ function exportPDF() {
   const startY = filtrosStr !== 'Sin filtros' ? 32 : 26;
 
   const tableRows = clients.map(c => {
-    const st = calcStatus(c.diasFaltantes, c.enSeguimiento);
+    const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
     return [
       c.nombre || '—',
