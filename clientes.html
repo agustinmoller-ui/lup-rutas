@@ -1128,12 +1128,15 @@ function initFilters() {
   ['map-comuna','list-comuna','dash-comuna','shared-comuna'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
+    // Limpiar duplicados en auto-refresh
+    while (sel.options.length > 1) sel.remove(1);
     comunas.forEach(c => { const o = new Option(c,c); sel.add(o); });
   });
   
-  ['map-vendedor','list-vendedor','dash-vendedor'].forEach(id => {
+  ['map-vendedor','list-vendedor','dash-vendedor','shared-vendedor'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
+    while (sel.options.length > 1) sel.remove(1);
     vendedores.forEach(v => { const o = new Option(v,v); sel.add(o); });
   });
 }
@@ -1206,15 +1209,11 @@ function applySharedFilterDebounced() {
   _filterDebounceTimer = setTimeout(applySharedFilter, 250);
 }
 
-let _renderVersion = 0;
 function applySharedFilter() {
-  const myVersion = ++_renderVersion;
   const filters = getSharedFilters();
   const clients = getFilteredClients(filters);
-  // Si ya hay un render más nuevo, descartar este
-  if (myVersion !== _renderVersion) return;
+  window._lastFilteredClients = clients;
   renderSharedCalugas(clients);
-  if (myVersion !== _renderVersion) return;
   const activeView = document.querySelector('.view.active')?.id;
   if (activeView === 'view-map') {
     renderMapMarkersFromClients(clients);
