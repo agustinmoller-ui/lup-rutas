@@ -390,22 +390,71 @@
     .popup-grid { grid-template-columns: 1fr 1fr; }
   }
 
-    /* Multiselect shared filters */
-    #shared-status, #shared-comuna, #shared-vendedor {
-      min-height: 30px;
-      max-height: 120px;
-      overflow-y: auto;
+    /* ---- Dropdown checkbox estilo Excel ---- */
+    .dd-wrap {
+      position: relative;
     }
-    #shared-status option, #shared-comuna option, #shared-vendedor option {
-      padding: 3px 6px;
-    }
-    #shared-status option:checked,
-    #shared-comuna option:checked,
-    #shared-vendedor option:checked {
-      background: var(--accent-soft);
+    .dd-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface2);
+      border: 1px solid var(--border);
       color: var(--text);
-      font-weight: 600;
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
     }
+    .dd-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dd-arrow { font-size: 10px; color: var(--text2); flex-shrink: 0; }
+    .dd-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      min-width: 160px;
+      max-width: 240px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 1000;
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+    .dd-panel.open { display: block; }
+    .dd-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+    .dd-item:hover { background: var(--surface2); }
+    .dd-item input[type=checkbox] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent);
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .dd-all { border-bottom: 1px solid var(--border); margin-bottom: 4px; font-weight: 600; }
 </style>
 
 <script>
@@ -445,11 +494,9 @@
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="showView('map',event)">🗺️ Mapa</button>
     <button class="tab-btn" onclick="showView('list',event)">🔔 Lista</button>
+    <button class="tab-btn" onclick="showView('dashboard',event)" id="tab-dashboard">📊 Ventas</button>
   </div>
   <div class="nav-right" style="display:flex;align-items:center;gap:6px">
-    <button onclick="showView('dashboard',event)" id="tab-dashboard"
-      style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:12px;color:var(--text2);font-family:inherit;white-space:nowrap">📊 Ventas</button>
-
     <span id="last-update" style="font-size:10px;color:var(--text2);display:none"></span>
     <button onclick="refreshData()" id="refresh-btn" title="Actualizar datos" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:14px;color:var(--text2)">⟳</button>
   </div>
@@ -467,18 +514,53 @@
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
       style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-      <select id="shared-comuna" multiple onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none;height:32px" title="Selección múltiple: mantén Ctrl/Cmd o toca varios"></select>
-      <select id="shared-status" multiple onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none;height:32px">
-        <option value="ok">🔵 OK</option>
-        <option value="green">🟢 Verde</option>
-        <option value="yellow">🟡 Amarillo</option>
-        <option value="red">🔴 Rojo</option>
-        <option value="critical">⚫ Crítico</option>
-        <option value="nodata">⚪ Sin datos</option>
-      </select>
-      <select id="shared-vendedor" multiple onchange="applySharedFilter()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:11px;font-family:inherit;outline:none;height:32px"></select>
+      <!-- Dropdown checkbox: Comuna -->
+      <div class="dd-wrap" id="dd-comuna">
+        <button class="dd-btn" onclick="toggleDropdown('dd-comuna',event)">
+          <span class="dd-label" id="dd-label-comuna">Comunas</span>
+          <span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="dd-panel-comuna">
+          <label class="dd-item dd-all">
+            <input type="checkbox" id="dd-all-comuna" checked onchange="toggleAllDD('comuna')"> Todas
+          </label>
+          <div id="dd-list-comuna"></div>
+        </div>
+      </div>
+      <!-- Dropdown checkbox: Estado -->
+      <div class="dd-wrap" id="dd-status">
+        <button class="dd-btn" onclick="toggleDropdown('dd-status',event)">
+          <span class="dd-label" id="dd-label-status">Estado</span>
+          <span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="dd-panel-status">
+          <label class="dd-item dd-all">
+            <input type="checkbox" id="dd-all-status" checked onchange="toggleAllDD('status')"> Todos
+          </label>
+          <div id="dd-list-status">
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="ok" onchange="onDDChange('status')"> 🔵 OK</label>
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="green" onchange="onDDChange('status')"> 🟢 Verde</label>
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="yellow" onchange="onDDChange('status')"> 🟡 Amarillo</label>
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="red" onchange="onDDChange('status')"> 🔴 Rojo</label>
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="critical" onchange="onDDChange('status')"> ⚫ Crítico</label>
+            <label class="dd-item"><input type="checkbox" class="dd-check-status" value="nodata" onchange="onDDChange('status')"> ⚪ Sin datos</label>
+          </div>
+        </div>
+      </div>
+      <!-- Dropdown checkbox: Vendedor -->
+      <div class="dd-wrap" id="dd-vendedor">
+        <button class="dd-btn" onclick="toggleDropdown('dd-vendedor',event)">
+          <span class="dd-label" id="dd-label-vendedor">Vendedor</span>
+          <span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="dd-panel-vendedor">
+          <label class="dd-item dd-all">
+            <input type="checkbox" id="dd-all-vendedor" checked onchange="toggleAllDD('vendedor')"> Todos
+          </label>
+          <div id="dd-list-vendedor"></div>
+        </div>
+      </div>
     </div>
-    <div style="font-size:9px;color:var(--text2);padding:0 2px;margin-top:-2px">Ctrl+clic (o toca) para elegir varios</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;margin-bottom:2px">
@@ -1110,19 +1192,18 @@ function initFilters() {
     while (sel.options.length > 1) sel.remove(1);
     comunas.forEach(c => { const o = new Option(c,c); sel.add(o); });
   });
-  // shared-comuna es multiple — vaciar todo y poblar sin placeholder
-  const scSel = document.getElementById('shared-comuna');
-  if (scSel) { while (scSel.options.length > 0) scSel.remove(0); comunas.forEach(c => scSel.add(new Option(c,c))); }
+  // Poblar dropdown checkbox de comunas
+  populateDD('comuna', comunas);
+  // Poblar dropdown checkbox de vendedores
+  populateDD('vendedor', vendedores);
 
+  // Mantener selects legacy (mapa/lista) para compatibilidad
   ['map-vendedor','list-vendedor'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     while (sel.options.length > 1) sel.remove(1);
     vendedores.forEach(v => { const o = new Option(v,v); sel.add(o); });
   });
-  // shared-vendedor es multiple — vaciar todo y poblar sin placeholder
-  const svSel = document.getElementById('shared-vendedor');
-  if (svSel) { while (svSel.options.length > 0) svSel.remove(0); vendedores.forEach(v => svSel.add(new Option(v,v))); }
 }
 
 // ============================================================
@@ -1157,7 +1238,80 @@ function toggleTodos(el) {
 // ============================================================
 // FILTRO COMPARTIDO — mapa y lista usan los mismos criterios
 // ============================================================
+
+// ============================================================
+// DROPDOWN CHECKBOX (estilo Excel)
+// ============================================================
+
+// Cerrar todos los dropdowns al hacer clic fuera
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.dd-wrap')) {
+    document.querySelectorAll('.dd-panel.open').forEach(p => p.classList.remove('open'));
+  }
+});
+
+function toggleDropdown(wrapId, evt) {
+  evt && evt.stopPropagation();
+  const panel = document.getElementById('dd-panel-' + wrapId.replace('dd-',''));
+  // cerrar otros
+  document.querySelectorAll('.dd-panel.open').forEach(p => { if (p !== panel) p.classList.remove('open'); });
+  panel.classList.toggle('open');
+}
+
+function toggleAllDD(type) {
+  const allCb = document.getElementById('dd-all-' + type);
+  const checks = document.querySelectorAll('.dd-check-' + type);
+  checks.forEach(c => { c.checked = false; });
+  updateDDLabel(type);
+  applySharedFilter();
+}
+
+function onDDChange(type) {
+  const allCb = document.getElementById('dd-all-' + type);
+  const checks = document.querySelectorAll('.dd-check-' + type);
+  const anyChecked = Array.from(checks).some(c => c.checked);
+  if (allCb) allCb.checked = !anyChecked;
+  updateDDLabel(type);
+  applySharedFilter();
+}
+
+function updateDDLabel(type) {
+  const checks = document.querySelectorAll('.dd-check-' + type);
+  const selected = Array.from(checks).filter(c => c.checked).map(c => c.parentElement.textContent.trim());
+  const labelEl = document.getElementById('dd-label-' + type);
+  if (!labelEl) return;
+  if (selected.length === 0) {
+    const defaults = { comuna: 'Comunas', status: 'Estado', vendedor: 'Vendedor' };
+    labelEl.textContent = defaults[type] || 'Todos';
+  } else if (selected.length === 1) {
+    labelEl.textContent = selected[0];
+  } else {
+    labelEl.textContent = selected.length + ' seleccionados';
+  }
+}
+
+function getDDValues(type) {
+  const checks = document.querySelectorAll('.dd-check-' + type);
+  return Array.from(checks).filter(c => c.checked).map(c => c.value);
+}
+
+function populateDD(type, options) {
+  // options: array de {value, label} o strings
+  const list = document.getElementById('dd-list-' + type);
+  if (!list) return;
+  list.innerHTML = '';
+  options.forEach(opt => {
+    const val = typeof opt === 'string' ? opt : opt.value;
+    const lbl = typeof opt === 'string' ? opt : opt.label;
+    const label = document.createElement('label');
+    label.className = 'dd-item';
+    label.innerHTML = '<input type="checkbox" class="dd-check-' + type + '" value="' + val.replace(/"/g,'\'') + '" onchange="onDDChange(\'' + type + '\'\')"> ' + lbl;
+    list.appendChild(label);
+  });
+}
+
 function getMultiValues(id) {
+  // Legacy — ya no se usa para shared filters (ahora usamos getDDValues)
   const sel = document.getElementById(id);
   if (!sel) return [];
   const vals = Array.from(sel.selectedOptions).map(o => o.value).filter(v => v !== '');
@@ -1167,9 +1321,9 @@ function getMultiValues(id) {
 function getSharedFilters() {
   return {
     search:    (document.getElementById('shared-search')?.value || '').toLowerCase(),
-    comunas:   getMultiValues('shared-comuna'),
-    statuses:  getMultiValues('shared-status'),
-    vendedores: getMultiValues('shared-vendedor'),
+    comunas:   getDDValues('comuna'),
+    statuses:  getDDValues('status'),
+    vendedores: getDDValues('vendedor'),
     minTicket: parseInt(document.getElementById('shared-ticket-slider')?.value) || 0,
     minDias:   parseInt(document.getElementById('shared-dias-slider')?.value) || 0,
     minVSV:    parseInt(document.getElementById('shared-vsv-slider')?.value) || 0,
@@ -1915,14 +2069,11 @@ function openHistorialByName(nombre) {
 function showView(name, evt) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  // Desactivar botones del nav-right
-  ['tab-dashboard'].forEach(id => { const el = document.getElementById(id); if (el) el.style.background = 'var(--surface2)'; });
+  // tab-dashboard ahora es .tab-btn — se maneja por querySelectorAll arriba
   document.getElementById(`view-${name}`).classList.add('active');
   if (evt && evt.currentTarget) {
     evt.currentTarget.classList.add('active');
-    if (name === 'dashboard') {
-      evt.currentTarget.style.background = 'var(--ac)';
-    }
+    // dashboard ahora usa clase tab-btn activo igual que map/list
   }
   
   // Los filtros compartidos siempre visibles (también para Ventas)
