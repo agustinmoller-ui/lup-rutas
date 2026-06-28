@@ -1204,11 +1204,12 @@ function getFilteredClients(filters) {
     if (f.minVSV > 0 && ((c._totalVisitas||0) === 0 || (c._visitasConsecSinVenta || 0) < f.minVSV)) return false;
     return true;
   });
-  // Debug: mostrar muestra de por qué no filtra
-  if (f.status && result.length === all.filter(c=>c.enSeguimiento).length) {
-    const sample = all.filter(c=>c.enSeguimiento).slice(0,3).map(c => `${c.nombre.slice(0,15)}:df=${c.diasFaltantes}:st=${getStatusFromDias(c.diasFaltantes,c.enSeguimiento)}`);
-    const dbg = document.getElementById('debug-banner');
-    if (dbg) dbg.textContent += ' | NO_FILTRA sample:' + sample.join('|');
+  // Debug completo
+  const dbg2 = document.getElementById('debug-banner');
+  if (dbg2) {
+    const seg = all.filter(c=>c.enSeguimiento);
+    const sample = seg.slice(0,2).map(c => `${c.nombre.slice(0,12)}:df=${c.diasFaltantes}(${typeof c.diasFaltantes}):st=${getStatusFromDias(c.diasFaltantes,c.enSeguimiento)}`);
+    dbg2.textContent += ` | result=${result.length}/${seg.length} | f.status="${f.status}" | ${sample.join(' | ')}`;
   }
   return result;
 }
