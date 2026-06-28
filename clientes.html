@@ -849,7 +849,6 @@ async function loadData(force = false) {
     initFilters();
     initMap();
     renderMapMarkers();
-    renderAdmin(); // inicializar vista admin con datos
     // Ajustar max del slider al ticket máximo real del dataset
     const maxTick = Math.max(0, ...Object.values(allClientsMap).map(c => c.ticketPromedio || 0));
     const maxSlider = Math.ceil(maxTick / 10000) * 10000;
@@ -859,7 +858,6 @@ async function loadData(force = false) {
     });
     renderList();
     renderDashboard();
-    renderAdmin();
     
     document.getElementById('loading').style.display = 'none';
     const upd = document.getElementById('last-update');
@@ -1875,110 +1873,6 @@ function openHistorialByName(nombre) {
   if (cliente) openHistorial(cliente.codigo);
 }
 
-function renderAdmin() {
-  const threshold = parseFloat(document.getElementById('gps-threshold').value) || 2;
-  const gpsVendedor = (document.getElementById('gps-vendedor') || {}).value || '';
-  const gpsDesdeEl = document.getElementById('gps-desde');
-  const gpsHastaEl = document.getElementById('gps-hasta');
-  const gpsDesde = gpsDesdeEl && gpsDesdeEl.value ? new Date(gpsDesdeEl.value) : null;
-  const gpsHasta = gpsHastaEl && gpsHastaEl.value ? new Date(gpsHastaEl.value) : null;
-
-  // Poblar select de vendedores en GPS si está vacío
-  const gpsVendSel = document.getElementById('gps-vendedor');
-  if (gpsVendSel && gpsVendSel.options.length <= 1) {
-    const vends = [...new Set(visitasData.map(v => v['salesman_name']).filter(Boolean))].sort();
-    vends.forEach(v => { const o = new Option(v,v); gpsVendSel.add(o); });
-  }
-  
-  // GPS anomalías con filtros
-  const anomalias = visitasData.filter(v => {
-    const dist = parseFloat(v['Distancia']);
-    if (isNaN(dist) || dist <= threshold) return false;
-    if (gpsVendedor && v['salesman_name'] !== gpsVendedor) return false;
-    const f = parseDate(v['Fecha Visita']);
-    if (gpsDesde && f && f < gpsDesde) return false;
-    if (gpsHasta && f && f > gpsHasta) return false;
-    return true;
-  }).sort((a,b) => parseFloat(b['Distancia']) - parseFloat(a['Distancia']));
-  
-  document.getElementById('gps-count').textContent = anomalias.length;
-  
-  const gpsList = document.getElementById('gps-list');
-  if (!anomalias.length) {
-    gpsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin anomalías GPS con estos filtros</div></div>';
-  } else {
-    gpsList.innerHTML = anomalias.slice(0, 50).map(function(v) {
-      var latV = parseFloat(v['lat_visita'] || v['Lat Visita'] || '');
-      var lngV = parseFloat(v['lng_visita'] || v['Lng Visita'] || '');
-      var latC = parseFloat(v['lat_cliente'] || v['address_latitude'] || '');
-      var lngC = parseFloat(v['lng_cliente'] || v['address_longitude'] || '');
-      var mapsVisita = (!isNaN(latV) && !isNaN(lngV)) ? 'https://www.google.com/maps?q=' + latV + ',' + lngV : '';
-      var mapsCliente = (!isNaN(latC) && !isNaN(lngC)) ? 'https://www.google.com/maps?q=' + latC + ',' + lngC : '';
-      var dist = parseFloat(v['Distancia']).toFixed(1);
-      var clientNombre = (v['client_name'] || '').replace(/'/g, "\'");
-      var pinsHtml = '';
-      if (mapsVisita) pinsHtml += '<a href="' + mapsVisita + '" target="_blank" title="Dónde marcó la visita" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;text-decoration:none;color:var(--text)">📍</a>';
-      if (mapsCliente) pinsHtml += '<a href="' + mapsCliente + '" target="_blank" title="Domicilio del cliente" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;text-decoration:none;color:var(--text)">🏪</a>';
-      pinsHtml += '<button onclick="openHistorialByName(\'' + clientNombre + '\')" title="Ver historial" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;color:var(--text)">📋</button>';
-      return '<div class="client-card" style="margin-bottom:8px;border-left:4px solid #dc2626">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-weight:600;font-size:14px;color:var(--text);margin-bottom:2px">' + (v['client_name'] || '—') + '</div>' +
-            '<div style="font-size:11px;color:var(--text2)">' + normalizeComuna(v['locality'] || '') + ' · ' + (v['salesman_name'] || '—') + '</div>' +
-            '<div style="font-size:11px;color:var(--text2);margin-top:2px">📅 ' + (v['Fecha Visita'] || '—') + ' · ' + (v['Visita/Venta'] || '—') + '</div>' +
-          '</div>' +
-          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">' +
-            '<span style="background:rgba(220,38,38,0.12);color:#dc2626;font-weight:700;font-size:13px;padding:3px 8px;border-radius:6px">' + dist + ' km</span>' +
-            '<div style="display:flex;gap:5px">' + pinsHtml + '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-  
-  // Solicitudes de baja (por comentario con "eliminar" o "baja")
-  const bajas = Object.values(allClientsMap).filter(c => {
-    const comment = (c.visitas.find(v => {
-      const comm = (v['comments'] || '').toLowerCase();
-      return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
-    }));
-    return !!comment;
-  });
-  
-  document.getElementById('baja-count').textContent = bajas.length;
-  const bajaList = document.getElementById('baja-list');
-  if (!bajas.length) {
-    bajaList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div>Sin solicitudes de baja</div></div>';
-  } else {
-    bajaList.innerHTML = bajas.map(c => {
-      const v = c.visitas.find(v => {
-        const comm = (v['comments'] || '').toLowerCase();
-        return comm.includes('eliminar') || comm.includes('baja') || comm.includes('cerrado') || comm.includes('no existe');
-      });
-      return `<div class="alert-card">
-        <div class="alert-icon">🗑️</div>
-        <div class="alert-info">
-          <div class="alert-name">${c.nombre}</div>
-          <div class="alert-detail">${c.comuna} · ${v['salesman_name'] || '—'} · ${v['Fecha Visita'] || '—'}</div>
-          <div class="alert-detail" style="color:#fbbf24;margin-top:4px">"${v['comments']}"</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button onclick="approveDelete('${c.codigo}')" style="background:#22c55e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Aprobar</button>
-          <button onclick="rejectDelete('${c.codigo}')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px">Rechazar</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
-}
-
-function approveDelete(codigo) {
-  if (confirm('¿Confirmar eliminación de cliente de seguimiento?')) {
-    alert('Marcado para eliminar. Acción debe confirmarse en el sheet.');
-  }
-}
-function rejectDelete(codigo) {
-  alert('Solicitud rechazada.');
-}
 
 // ============================================================
 // NAV
