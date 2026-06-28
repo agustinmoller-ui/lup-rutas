@@ -445,7 +445,7 @@
   <!-- ===== FILTRO COMPARTIDO (Mapa + Lista) ===== -->
   <!-- Panel de filtros fijo (sin toggle para evitar colapso accidental) -->
 
-  <div style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+  <div id="shared-filter-wrapper" style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
     <div id="filter-toggle-bar" style="display:none"></div>
     <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
@@ -1998,14 +1998,9 @@ function showView(name, evt) {
   }
   
   // Mostrar/ocultar filtros compartidos según vista
-  const sf = document.getElementById('shared-filter');
-  const sfSearch = document.getElementById('shared-search');
-  if (sf) {
-    if (name === 'dashboard') {
-      sf.style.display = 'none';
-    } else {
-      sf.style.display = 'flex';
-    }
+  const sfw = document.getElementById('shared-filter-wrapper');
+  if (sfw) {
+    sfw.style.display = (name === 'dashboard') ? 'none' : '';
   }
 
   if (name === 'map') {
