@@ -444,6 +444,8 @@
 
   <!-- ===== FILTRO COMPARTIDO (Mapa + Lista) ===== -->
   <!-- Panel de filtros fijo (sin toggle para evitar colapso accidental) -->
+  <!-- DEBUG banner temporal - borrar luego -->
+  <div id="debug-banner" style="background:#1e293b;color:#fbbf24;font-size:10px;padding:2px 8px;font-family:monospace;display:block"></div>
   <div style="background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
     <div id="filter-toggle-bar" style="display:none"></div>
     <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
@@ -1213,16 +1215,13 @@ function applySharedFilter() {
   const filters = getSharedFilters();
   const clients = getFilteredClients(filters);
   window._lastFilteredClients = clients;
+  // Debug banner temporal
+  const dbg = document.getElementById('debug-banner');
+  if (dbg) dbg.textContent = `Filtro → ${clients.length} clientes | Estado:${filters.status||'todos'} | Vend:${filters.vendedor||'todos'} | Días:${filters.minDias}`;
   renderSharedCalugas(clients);
-  const activeView = document.querySelector('.view.active')?.id;
-  if (activeView === 'view-map') {
-    renderMapMarkersFromClients(clients);
-  } else if (activeView === 'view-list') {
-    renderListFromClients(clients);
-  } else {
-    renderMapMarkersFromClients(clients);
-    renderListFromClients(clients);
-  }
+  // Siempre renderizar ambas vistas para evitar problemas de detección
+  renderMapMarkersFromClients(clients);
+  renderListFromClients(clients);
 }
 
 function renderSharedCalugas(clients) {
