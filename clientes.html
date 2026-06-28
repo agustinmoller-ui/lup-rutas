@@ -1305,7 +1305,13 @@ function populateDD(type, options) {
     const lbl = typeof opt === 'string' ? opt : opt.label;
     const label = document.createElement('label');
     label.className = 'dd-item';
-    label.innerHTML = '<input type="checkbox" class="dd-check-' + type + '" value="' + val.replace(/"/g,'\'') + '" onchange="onDDChange(\'' + type + '\'\')"> ' + lbl;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'dd-check-' + type;
+    cb.value = val;
+    cb.addEventListener('change', function() { onDDChange(type); });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + lbl));
     list.appendChild(label);
   });
 }
