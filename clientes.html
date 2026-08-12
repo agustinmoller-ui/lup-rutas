@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
-<title>LUP — Clientes v40</title><!-- build:20260812_144700 -->
+<title>LUP — Clientes v41</title><!-- build:20260812_150500 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -855,7 +855,8 @@ const STATUS_LABELS = {
 // LOAD DATA
 // ============================================================
 let rutasData = []; // Todos los clientes del borrador de rutas
-let clientsByNormName = {}; // Lookup para aplicar filtros de cliente en todas las pestañas
+let clientsByNormName = {}; // Fallback por nombre
+let clientsByRut = {}; // Llave primaria para métricas y filtros
 
 
 // Pre-computa métricas de visitas por cliente (correr una vez al cargar datos)
@@ -869,10 +870,27 @@ function precomputeClientMetrics() {
     if (!visByName[nm]) visByName[nm] = [];
     visByName[nm].push(v);
   });
-  // Índice por code
+  // Índices por RUT normalizado (primario) y code (fallback)
+  const visByRut = {};
   const visByCode = {};
+  const rutsByCode = {};
+  const rutsByName = {};
   visitasData.forEach(v => {
+    const rt = normalizeRut(v['client_rut']);
     const cd = String(v['client_code'] || v['client_id'] || '').trim();
+    const nm = normName(v['client_name']);
+    if (rt) {
+      if (!visByRut[rt]) visByRut[rt] = [];
+      visByRut[rt].push(v);
+      if (cd) {
+        if (!rutsByCode[cd]) rutsByCode[cd] = new Set();
+        rutsByCode[cd].add(rt);
+      }
+      if (nm) {
+        if (!rutsByName[nm]) rutsByName[nm] = new Set();
+        rutsByName[nm].add(rt);
+      }
+    }
     if (cd) {
       if (!visByCode[cd]) visByCode[cd] = [];
       visByCode[cd].push(v);
@@ -882,8 +900,11 @@ function precomputeClientMetrics() {
   // Días sin venta al momento de cada visita (para todos los historiales)
   const historyGroups = {};
   visitasData.forEach(v => {
+    const rt = normalizeRut(v['client_rut']);
     const code = String(v['client_code'] || v['client_id'] || '').trim();
-    const key = code ? 'code:' + code : 'name:' + normName(v['client_name']);
+    const nm = normName(v['client_name']);
+    const key = rt ? 'rut:' + rt : (code ? 'code:' + code : (nm ? 'name:' + nm : ''));
+    if (!key) return;
     if (!historyGroups[key]) historyGroups[key] = [];
     historyGroups[key].push(v);
   });
@@ -903,10 +924,16 @@ function precomputeClientMetrics() {
   });
 
   clientsByNormName = {};
+  clientsByRut = {};
   Object.values(allClientsMap).forEach(c => {
     const nm = normName(c.nombre);
     if (nm) clientsByNormName[nm] = c;
-    const visitas = (visByName[nm] || visByCode[c.codigo] || [])
+    const codeRuts = rutsByCode[c.codigo] ? Array.from(rutsByCode[c.codigo]) : [];
+    const nameRuts = rutsByName[nm] ? Array.from(rutsByName[nm]) : [];
+    const rutCandidates = codeRuts.length === 1 ? codeRuts : nameRuts;
+    c.rutNormalized = rutCandidates.length === 1 ? rutCandidates[0] : '';
+    if (c.rutNormalized) clientsByRut[c.rutNormalized] = c;
+    const visitas = (visByRut[c.rutNormalized] || visByName[nm] || visByCode[c.codigo] || [])
       .sort((a,b) => (parseDate(b['Fecha Visita'])||new Date(0)) - (parseDate(a['Fecha Visita'])||new Date(0)));
     
     // Último tipo de visita
@@ -1062,6 +1089,11 @@ async function loadFromBackend(forceRefresh = false) {
 
 // Mantener para compatibilidad — no se usa directamente
 async function fetchSheetGVIZ(sheetName, range) { return []; }
+
+// RUT normalizado: dígitos + dígito verificador, sin puntos ni guion
+function normalizeRut(value) {
+  return String(value || '').toUpperCase().replace(/[^0-9K]/g, '');
+}
 
 // Normaliza nombre para cruce tolerante a variantes
 function normName(n) {
@@ -1856,8 +1888,9 @@ function formatDiasSinVenta(value) {
 }
 
 function getClientForVisit(v) {
+  const rt = normalizeRut(v['client_rut']);
   const code = String(v['client_code'] || v['client_id'] || '').trim();
-  return (code && allClientsMap[code]) || clientsByNormName[normName(v['client_name'])] || null;
+  return (rt && clientsByRut[rt]) || (code && allClientsMap[code]) || clientsByNormName[normName(v['client_name'])] || null;
 }
 
 function renderDashboard() {
