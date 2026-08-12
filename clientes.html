@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
-<title>LUP — Clientes v39</title><!-- build:20260627_214440 -->
+<title>LUP — Clientes v40</title><!-- build:20260812_144700 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -513,7 +513,7 @@
     <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
       style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">
       <!-- Dropdown checkbox: Comuna -->
       <div class="dd-wrap" id="dd-comuna">
         <button class="dd-btn" onclick="toggleDropdown('dd-comuna',event)">
@@ -577,6 +577,14 @@
         <input type="range" id="shared-dias-slider" min="0" max="90" step="1" value="0"
           style="width:100%;height:3px;accent-color:#ef4444;cursor:pointer;margin-top:8px"
           oninput="document.getElementById('shared-dias-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilterDebounced()">
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;margin-bottom:2px">
+          <span style="white-space:nowrap">⏳ Días s/venta</span><span style="display:flex;align-items:center;gap:2px;flex-shrink:0"><span id="shared-dsv-label" style="font-weight:700;color:var(--text)">Todos</span><span onclick="alert('Días transcurridos desde la última venta.\nEjemplo: 30d+ = clientes que llevan 30 o más días sin comprar.\nLos clientes que nunca han comprado también se incluyen.')" style="cursor:pointer;opacity:0.5;font-size:9px">❓</span>
+        </div>
+        <input type="range" id="shared-dsv-slider" min="0" max="365" step="1" value="0"
+          style="width:100%;height:3px;accent-color:#8b5cf6;cursor:pointer;margin-top:8px"
+          oninput="document.getElementById('shared-dsv-label').textContent=this.value==0?'Todos':this.value+'d+';applySharedFilterDebounced()">
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;display:flex;flex-direction:column;min-height:42px">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;margin-bottom:2px">
@@ -671,10 +679,10 @@
               <th onclick="sortList('nombre')">Nombre ↕</th>
               <th onclick="sortList('diasFaltantes')">Estado ↕</th>
               <th onclick="sortList('ultimaVisita')">Última Visita ↕</th>
-              <th onclick="sortList('diasSinContacto')">Días ↕</th>
+              <th onclick="sortList('diasSinContacto')">Días s/visita ↕</th>
               <th onclick="sortList('frecuenciaIdeal')">Frec. ↕</th>
+              <th onclick="sortList('_diasSinVenta')">Días s/venta ↕</th>
               <th onclick="sortList('ticketPromedio')">Ticket ↕</th>
-              <th>📍</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -742,6 +750,7 @@
             <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Cliente</th>
             <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Vendedor</th>
             <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Tipo</th>
+            <th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:500">Días s/venta</th>
             <th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:500">Monto</th>
             <th style="text-align:right;padding:7px 6px;color:var(--text2);font-weight:500">Dist.</th>
             <th style="text-align:left;padding:7px 6px;color:var(--text2);font-weight:500">Comentario</th>
@@ -776,7 +785,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Fecha</th><th>Gap</th><th>Tipo</th><th>Dist.</th><th>Vendedor</th><th>Monto</th>
+            <th>Fecha</th><th>Gap</th><th>Tipo</th><th>Días s/venta</th><th>Dist.</th><th>Vendedor</th><th>Monto</th>
           </tr></thead>
           <tbody id="modal-hist-body"></tbody>
         </table>
@@ -846,7 +855,7 @@ const STATUS_LABELS = {
 // LOAD DATA
 // ============================================================
 let rutasData = []; // Todos los clientes del borrador de rutas
-
+let clientsByNormName = {}; // Lookup para aplicar filtros de cliente en todas las pestañas
 
 
 // Pre-computa métricas de visitas por cliente (correr una vez al cargar datos)
@@ -870,8 +879,33 @@ function precomputeClientMetrics() {
     }
   });
   
+  // Días sin venta al momento de cada visita (para todos los historiales)
+  const historyGroups = {};
+  visitasData.forEach(v => {
+    const code = String(v['client_code'] || v['client_id'] || '').trim();
+    const key = code ? 'code:' + code : 'name:' + normName(v['client_name']);
+    if (!historyGroups[key]) historyGroups[key] = [];
+    historyGroups[key].push(v);
+  });
+  Object.values(historyGroups).forEach(group => {
+    group.sort((a,b) => (parseDate(a['Fecha Visita'])||new Date(0)) - (parseDate(b['Fecha Visita'])||new Date(0)));
+    let lastSaleDate = null;
+    group.forEach(v => {
+      const fecha = parseDate(v['Fecha Visita']);
+      const esVenta = (v['Visita/Venta'] || '') === 'Venta';
+      if (esVenta) {
+        v._diasSinVentaAlMomento = 0;
+        if (fecha) lastSaleDate = fecha;
+      } else {
+        v._diasSinVentaAlMomento = fecha && lastSaleDate ? calendarDayDiff(fecha, lastSaleDate) : null;
+      }
+    });
+  });
+
+  clientsByNormName = {};
   Object.values(allClientsMap).forEach(c => {
     const nm = normName(c.nombre);
+    if (nm) clientsByNormName[nm] = c;
     const visitas = (visByName[nm] || visByCode[c.codigo] || [])
       .sort((a,b) => (parseDate(b['Fecha Visita'])||new Date(0)) - (parseDate(a['Fecha Visita'])||new Date(0)));
     
@@ -891,7 +925,7 @@ function precomputeClientMetrics() {
     const ultimaVenta = visitas.find(v => (v['Visita/Venta'] || '') === 'Venta');
     if (ultimaVenta) {
       const fechaVenta = parseDate(ultimaVenta['Fecha Visita']);
-      c._diasSinVenta = fechaVenta ? Math.round((new Date() - fechaVenta) / 86400000) : null;
+      c._diasSinVenta = fechaVenta ? calendarDayDiff(new Date(), fechaVenta) : null;
     } else {
       c._diasSinVenta = null; // nunca ha comprado
     }
@@ -952,6 +986,10 @@ async function loadData(force = false) {
       const el = document.getElementById(id);
       if (el && maxTick > 0) el.max = maxSlider;
     });
+    const diasVentaNumericos = Object.values(allClientsMap).map(c => c._diasSinVenta).filter(v => Number.isFinite(v));
+    const maxDiasVenta = diasVentaNumericos.length ? Math.max(...diasVentaNumericos) : 365;
+    const dsvSlider = document.getElementById('shared-dsv-slider');
+    if (dsvSlider) dsvSlider.max = Math.max(90, Math.ceil(maxDiasVenta / 30) * 30);
     renderList();
     renderDashboard();
     
@@ -1332,6 +1370,7 @@ function getSharedFilters() {
     vendedores: getDDValues('vendedor'),
     minTicket: parseInt(document.getElementById('shared-ticket-slider')?.value) || 0,
     minDias:   parseInt(document.getElementById('shared-dias-slider')?.value) || 0,
+    minDiasSinVenta: parseInt(document.getElementById('shared-dsv-slider')?.value) || 0,
     minVSV:    parseInt(document.getElementById('shared-vsv-slider')?.value) || 0,
   };
 }
@@ -1351,6 +1390,8 @@ function getFilteredClients(filters) {
     if (statuses.length   && !statuses.includes(st))          return false;
     if (f.minTicket > 0 && (c.ticketPromedio||0) < f.minTicket) return false;
     if (f.minDias > 0 && (parseFloat(c.diasSinContacto)||0) < f.minDias) return false;
+    // null = nunca ha comprado: se incluye en cualquier filtro mínimo de días sin venta
+    if (f.minDiasSinVenta > 0 && c._diasSinVenta !== null && c._diasSinVenta !== undefined && c._diasSinVenta < f.minDiasSinVenta) return false;
     if (f.minVSV > 0 && ((c._totalVisitas||0) === 0 || (c._visitasConsecSinVenta || 0) < f.minVSV)) return false;
     return true;
   });
@@ -1453,7 +1494,7 @@ function renderMapMarkersFromClients(clients) {
     const marker = L.marker([c.lat, c.lng], { icon: makeMarkerIcon(st, 12) });
     const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes} días` : '—';
     const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
-    marker.bindPopup(`<div class="popup-inner"><div class="popup-name">${c.nombre}</div><div class="popup-addr">${c.direccion || c.comuna}</div><div class="popup-grid"><div class="popup-stat"><div class="popup-stat-label">Última visita</div><div class="popup-stat-val">${c.ultimaVisita || '—'}</div></div><div class="popup-stat"><div class="popup-stat-label">Días falt.</div><div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Ticket</div><div class="popup-stat-val">${ticketStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Frecuencia</div><div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div></div></div><div class="popup-actions">${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}<button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button></div></div>`, { maxWidth: 280 });
+    marker.bindPopup(`<div class="popup-inner"><div class="popup-name">${c.nombre}</div><div class="popup-addr">${c.direccion || c.comuna}</div><div class="popup-grid"><div class="popup-stat"><div class="popup-stat-label">Última visita</div><div class="popup-stat-val">${c.ultimaVisita || '—'}</div></div><div class="popup-stat"><div class="popup-stat-label">Días falt.</div><div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Ticket</div><div class="popup-stat-val">${ticketStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Días sin venta</div><div class="popup-stat-val">${formatDiasSinVenta(c._diasSinVenta)}</div></div><div class="popup-stat"><div class="popup-stat-label">Frecuencia</div><div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div></div></div><div class="popup-actions">${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}<button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button></div></div>`, { maxWidth: 280 });
     marker.addTo(map);
     markers.push(marker);
   });
@@ -1518,7 +1559,7 @@ function renderListFromClients(clients) {
   // Table
   const tbody = document.getElementById('list-body');
   if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
     return;
   }
   
@@ -1545,6 +1586,7 @@ function renderListFromClients(clients) {
         <td>${c.ultimaVisita || '—'}</td>
         <td style="text-align:center">${c.diasSinContacto || '—'}</td>
         <td style="text-align:center">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</td>
+        <td style="text-align:center;font-weight:600">${formatDiasSinVenta(c._diasSinVenta)}</td>
         <td>${tStr}</td>
         <td>
           <div style="display:flex;gap:6px">
@@ -1578,11 +1620,8 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
-            ${c._visitasConsecSinVenta === 0 && c._diasSinVenta !== null 
-    ? `<span style="font-size:11px;color:#16a34a">✅ Compró en última visita</span>`
-    : c._visitasConsecSinVenta > 0 
-      ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta} vis. · ${c._diasSinVenta !== null ? c._diasSinVenta+'d' : '—'} sin compra</span>` 
-      : ''}
+            <span style="font-size:11px;color:${c._diasSinVenta === 0 ? '#16a34a' : '#ef4444'}">⏳ ${formatDiasSinVenta(c._diasSinVenta)} s/venta</span>
+            ${c._visitasConsecSinVenta > 0 ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta} visitas s/venta</span>` : ''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
@@ -1633,6 +1672,7 @@ function openHistorial(codigo) {
     <div class="modal-stat"><div class="modal-stat-val">$${Math.round(ticketProm).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Ticket promedio</div></div>
     <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
     <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
+    <div class="modal-stat"><div class="modal-stat-val">${formatDiasSinVenta(c._diasSinVenta)}</div><div class="modal-stat-lbl">Días sin venta</div></div>
     <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
   `;
   
@@ -1692,6 +1732,7 @@ function openHistorial(codigo) {
       <td style="white-space:nowrap">${v['Fecha Visita'] || '—'}</td>
       <td style="text-align:center"><span style="font-weight:700;color:${gapColor};font-size:13px">${diasGap}</span></td>
       <td><span style="color:${color};font-weight:600">${tipo}</span></td>
+      <td style="text-align:center;font-weight:600">${formatDiasSinVenta(v._diasSinVentaAlMomento)}</td>
       <td style="text-align:center"><span style="font-weight:600;color:${distColor};font-size:12px">${distStr}</span></td>
       <td style="font-size:12px">${v['salesman_name'] || '—'}</td>
       <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
@@ -1781,11 +1822,12 @@ function renderDashDetalle() {
       <td style="padding:6px;font-weight:500">${v['client_name'] || '—'}</td>
       <td style="padding:6px;color:var(--text2)">${v['salesman_name'] || '—'}</td>
       <td style="padding:6px"><span style="background:${esVenta?'rgba(22,163,74,0.12)':'rgba(59,130,246,0.1)'};color:${esVenta?'#16a34a':'#2563eb'};border-radius:4px;padding:2px 6px;font-size:11px">${v['Visita/Venta'] || '—'}</span></td>
+      <td style="padding:6px;text-align:right;font-weight:600">${formatDiasSinVenta(v._diasSinVentaAlMomento)}</td>
       <td style="padding:6px;text-align:right;font-weight:600;color:${esVenta?'var(--accent)':'var(--text2)'}">${esVenta ? '$'+Math.round(monto).toLocaleString('es-CL') : '—'}</td>
       <td style="padding:6px;text-align:right;color:${anomalia?'#dc2626':'var(--text2)'};font-weight:${anomalia?'700':'400'}">${dist > 0 ? dist.toFixed(1)+'km' : '—'}${anomalia?' ⚠️':''}</td>
       <td style="padding:6px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(v.comments || '').replace(/[<>"]/g, ' ')}">${v['comments'] || ''}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text2)">Sin registros</td></tr>';
 }
 
 function resetDashDates() {
@@ -1800,6 +1842,22 @@ function parseDate(str) {
   const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
   return new Date(str);
+}
+
+function calendarDayDiff(later, earlier) {
+  if (!later || !earlier) return null;
+  const a = new Date(earlier); a.setHours(0,0,0,0);
+  const b = new Date(later); b.setHours(0,0,0,0);
+  return Math.max(0, Math.floor((b - a) / 86400000));
+}
+
+function formatDiasSinVenta(value) {
+  return value === null || value === undefined || value === '' ? 'Nunca' : value + 'd';
+}
+
+function getClientForVisit(v) {
+  const code = String(v['client_code'] || v['client_id'] || '').trim();
+  return (code && allClientsMap[code]) || clientsByNormName[normName(v['client_name'])] || null;
 }
 
 function renderDashboard() {
@@ -1841,6 +1899,11 @@ function renderDashboard() {
     if (vendedores.length && !vendedores.includes(v['salesman_name'])) return false;
     if (comunas.length && !comunas.includes(normalizeComuna(v['locality']))) return false;
     if (search && !(v['client_name'] || '').toLowerCase().includes(search)) return false;
+    if (sf.minDiasSinVenta > 0) {
+      const client = getClientForVisit(v);
+      if (!client) return false;
+      if (client._diasSinVenta !== null && client._diasSinVenta !== undefined && client._diasSinVenta < sf.minDiasSinVenta) return false;
+    }
     return true;
   });
 
@@ -2141,8 +2204,9 @@ function exportExcel() {
   if (f.statuses && f.statuses.length) filtrosActivos.push('Estado: ' + f.statuses.join(', '));
   if (f.vendedores && f.vendedores.length) filtrosActivos.push('Vendedor: ' + f.vendedores.join(', '));
   if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
-  if (f.maxDias < 999) filtrosActivos.push('Días máx: ' + f.maxDias);
-  if (f.minSinVenta > 0) filtrosActivos.push('Sin venta ≥: ' + f.minSinVenta);
+  if (f.minDias > 0) filtrosActivos.push('Días sin visita ≥: ' + f.minDias);
+  if (f.minDiasSinVenta > 0) filtrosActivos.push('Días sin venta ≥: ' + f.minDiasSinVenta);
+  if (f.minVSV > 0) filtrosActivos.push('Visitas sin venta ≥: ' + f.minVSV);
   
   const filtrosStr = filtrosActivos.length ? filtrosActivos.join(' | ') : 'Sin filtros';
 
@@ -2175,7 +2239,7 @@ function exportExcel() {
     ['Filtros aplicados:', filtrosStr],
     ['Total clientes:', clients.length],
     [],
-    ['Nombre', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin compra', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
+    ['Nombre', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin venta', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
     ...rows
   ];
 
@@ -2227,8 +2291,9 @@ function exportPDF() {
   if (f.statuses && f.statuses.length) filtrosActivos.push('Estado: ' + f.statuses.join(', '));
   if (f.vendedores && f.vendedores.length) filtrosActivos.push('Vendedor: ' + f.vendedores.join(', '));
   if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
-  if (f.maxDias < 999) filtrosActivos.push('Días máx: ' + f.maxDias);
-  if (f.minSinVenta > 0) filtrosActivos.push('Sin venta ≥: ' + f.minSinVenta);
+  if (f.minDias > 0) filtrosActivos.push('Días sin visita ≥: ' + f.minDias);
+  if (f.minDiasSinVenta > 0) filtrosActivos.push('Días sin venta ≥: ' + f.minDiasSinVenta);
+  if (f.minVSV > 0) filtrosActivos.push('Visitas sin venta ≥: ' + f.minVSV);
   const filtrosStr = filtrosActivos.length ? filtrosActivos.join(' | ') : 'Sin filtros';
 
   const STATUS_LABEL_MAP = { ok:'OK', green:'Verde', yellow:'Amarillo', red:'Rojo', critical:'Crítico', nodata:'Sin datos' };
@@ -2261,6 +2326,7 @@ function exportPDF() {
       STATUS_LABEL_MAP[st] || '—',
       c.ultimaVisita || '—',
       c.diasSinContacto || '—',
+      formatDiasSinVenta(c._diasSinVenta),
       c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—',
       c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—',
       mapsUrl ? '📍 Maps' : '—'
@@ -2269,20 +2335,21 @@ function exportPDF() {
 
   doc.autoTable({
     startY: startY,
-    head: [['Nombre', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/c', 'Frec.', 'Ticket', '📍']],
+    head: [['Nombre', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/visita', 'Días s/venta', 'Frec.', 'Ticket', '📍']],
     body: tableRows,
     styles: { fontSize: 7.5, cellPadding: 2, overflow: 'ellipsize' },
     headStyles: { fillColor: [79, 110, 247], textColor: 255, fontStyle: 'bold', fontSize: 8 },
     columnStyles: {
-      0: { cellWidth: 55 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 24 },
-      5: { cellWidth: 16 },
-      6: { cellWidth: 14 },
-      7: { cellWidth: 24 },
-      8: { cellWidth: 18 }
+      0: { cellWidth: 52 },
+      1: { cellWidth: 26 },
+      2: { cellWidth: 24 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 22 },
+      5: { cellWidth: 14 },
+      6: { cellWidth: 15 },
+      7: { cellWidth: 13 },
+      8: { cellWidth: 22 },
+      9: { cellWidth: 17 }
     },
     didParseCell: function(data) {
       if (data.section === 'body' && data.column.index === 3) {
@@ -2293,7 +2360,7 @@ function exportPDF() {
     },
     didDrawCell: function(data) {
       // Hipervínculo en columna Maps
-      if (data.section === 'body' && data.column.index === 8 && data.cell.raw === '📍 Maps') {
+      if (data.section === 'body' && data.column.index === 9 && data.cell.raw === '📍 Maps') {
         const c = clients[data.row.index];
         if (c && c.lat && c.lng) {
           const url = `https://www.google.com/maps?q=${c.lat},${c.lng}`;
