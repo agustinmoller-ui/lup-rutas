@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
-<title>LUP — Clientes v41</title><!-- build:20260812_150500 -->
+<title>LUP — Clientes v42</title><!-- build:20260813_114500 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -677,6 +677,7 @@
           <thead>
             <tr>
               <th onclick="sortList('nombre')">Nombre ↕</th>
+              <th>Teléfono</th>
               <th onclick="sortList('diasFaltantes')">Estado ↕</th>
               <th onclick="sortList('ultimaVisita')">Última Visita ↕</th>
               <th onclick="sortList('diasSinContacto')">Días s/visita ↕</th>
@@ -808,6 +809,9 @@ let mostrarTodos = false; // switch: seguimiento vs todos
 // STATE
 // ============================================================
 let seguimientoData = [];  // Clientes seguimiento
+let telefonosData = [];    // Teléfonos por RUT desde la base maestra
+let phoneByRut = {};
+let phoneByCode = {};
 let visitasData = [];       // Todas las visitas
 let allClientsMap = {};     // Mapa de todos los clientes únicos desde Visitas
 let map = null;
@@ -931,8 +935,11 @@ function precomputeClientMetrics() {
     const codeRuts = rutsByCode[c.codigo] ? Array.from(rutsByCode[c.codigo]) : [];
     const nameRuts = rutsByName[nm] ? Array.from(rutsByName[nm]) : [];
     const rutCandidates = codeRuts.length === 1 ? codeRuts : nameRuts;
-    c.rutNormalized = rutCandidates.length === 1 ? rutCandidates[0] : '';
-    if (c.rutNormalized) clientsByRut[c.rutNormalized] = c;
+    c.rutNormalized = rutCandidates.length === 1 ? rutCandidates[0] : (c.rutNormalized || '');
+    if (c.rutNormalized) {
+      clientsByRut[c.rutNormalized] = c;
+      c.telefono = phoneByRut[c.rutNormalized] || c.telefono || '';
+    }
     const visitas = (visByRut[c.rutNormalized] || visByName[nm] || visByCode[c.codigo] || [])
       .sort((a,b) => (parseDate(b['Fecha Visita'])||new Date(0)) - (parseDate(a['Fecha Visita'])||new Date(0)));
     
@@ -971,11 +978,21 @@ function toggleFilters() {
 
 async function loadData(force = false) {
   try {
-    // Intentar cargar desde cache del backend primero (rápido)
-    const data = await loadFromBackend(force);
+    // Cargar datos operativos y teléfonos en paralelo
+    const [data, phones] = await Promise.all([loadFromBackend(force), loadPhonesFromBackend(force)]);
     seguimientoData = data.seguimiento || [];
     rutasData = data.rutas || [];
     visitasData = data.visitas || [];
+    telefonosData = phones.telefonos || [];
+    phoneByRut = {};
+    phoneByCode = {};
+    telefonosData.forEach(row => {
+      const rt = normalizeRut(row.rut);
+      const code = String(row.codigo || '').trim();
+      const tel = normalizePhone(row.telefono);
+      if (rt && tel) phoneByRut[rt] = tel;
+      if (code && rt && tel) phoneByCode[code] = { rut: rt, telefono: tel };
+    });
     // Recalcular diasFaltantes con fecha de HOY (no confiar en el Sheet)
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -1059,6 +1076,23 @@ async function refreshData() {
 
 // Carga datos desde función backend (sin CORS, con cache de 5 min)
 const API_URL = 'https://lupita-f3e3c640.base44.app/functions/getClientes';
+const PHONES_API_URL = 'https://lupita-f3e3c640.base44.app/functions/getTelefonosClientes';
+
+async function loadPhonesFromBackend(forceRefresh = false) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const url = forceRefresh ? PHONES_API_URL + '?force=true&t=' + Date.now() : PHONES_API_URL;
+    const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) throw new Error('Teléfonos HTTP ' + resp.status);
+    const data = await resp.json();
+    if (data.ok || data.stale) return data;
+  } catch (e) {
+    console.warn('[LUP] teléfonos no disponibles:', e.message);
+  }
+  return { telefonos: [] };
+}
 
 async function loadFromBackend(forceRefresh = false) {
   // Estrategia: GET con retry — 2 intentos, timeout 8s cada uno
@@ -1095,6 +1129,29 @@ function normalizeRut(value) {
   return String(value || '').toUpperCase().replace(/[^0-9K]/g, '');
 }
 
+function normalizePhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('0056')) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('56')) return '+' + digits;
+  if (digits.length === 9) return '+56' + digits;
+  if (digits.length === 8) return '+562' + digits;
+  return digits.length >= 10 ? '+' + digits : '';
+}
+
+function formatPhone(value) {
+  const phone = normalizePhone(value);
+  if (!phone) return 'Sin teléfono';
+  const d = phone.replace(/\D/g, '');
+  if (d.length === 11 && d.startsWith('569')) return `+56 9 ${d.slice(3,7)} ${d.slice(7)}`;
+  if (d.length === 11 && d.startsWith('562')) return `+56 2 ${d.slice(3,7)} ${d.slice(7)}`;
+  return phone;
+}
+
+function whatsappUrl(value) {
+  const digits = normalizePhone(value).replace(/\D/g, '');
+  return digits ? 'https://wa.me/' + digits : '';
+}
+
 // Normaliza nombre para cruce tolerante a variantes
 function normName(n) {
   if (!n) return '';
@@ -1114,6 +1171,7 @@ function buildAllClientsMap() {
     if (!code) return;
     const lat = parseFloat(r['Lat'] || r['M']);
     const lng = parseFloat(r['Lng'] || r['N']);
+    const phoneRecord = phoneByCode[code] || {};
     allClientsMap[code] = {
       codigo: code,
       nombre: r['Nombre'] || r['B'] || '',
@@ -1125,6 +1183,8 @@ function buildAllClientsMap() {
       vendedorRuta: r['Vendedor'] || r['I'] || '',
       dia: r['Dia'] || r['L'] || '',
       semana: r['Semana'] || r['K'] || '',
+      rutNormalized: phoneRecord.rut || '',
+      telefono: phoneRecord.telefono || '',
       // Datos de seguimiento (se llenan abajo si existe)
       ultimaVisita: '',
       ultimaCompra: '',
@@ -1167,6 +1227,8 @@ function buildAllClientsMap() {
         frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
         diasFaltantes: isNaN(dias) ? null : dias,
         kmUltimo: cs['Km desde último contacto'] || '',
+        telefono: (phoneByCode[code] || {}).telefono || allClientsMap[code].telefono || '',
+        rutNormalized: (phoneByCode[code] || {}).rut || allClientsMap[code].rutNormalized || '',
         enSeguimiento: true
       });
     } else {
@@ -1187,6 +1249,8 @@ function buildAllClientsMap() {
         frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
         diasFaltantes: isNaN(dias) ? null : dias,
         kmUltimo: cs['Km desde último contacto'] || '',
+        telefono: (phoneByCode[code] || {}).telefono || '',
+        rutNormalized: (phoneByCode[code] || {}).rut || '',
         enSeguimiento: true,
         visitas: []
       };
@@ -1219,6 +1283,8 @@ function buildAllClientsMap() {
       frecuenciaIdeal: null,
       diasFaltantes: null,
       kmUltimo: '',
+      rutNormalized: normalizeRut(v['client_rut']),
+      telefono: phoneByRut[normalizeRut(v['client_rut'])] || '',
       enSeguimiento: false,
       visitas: []
     };
@@ -1591,7 +1657,7 @@ function renderListFromClients(clients) {
   // Table
   const tbody = document.getElementById('list-body');
   if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin resultados</td></tr>';
     return;
   }
   
@@ -1614,6 +1680,7 @@ function renderListFromClients(clients) {
     return `
       <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
         <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
+        <td style="white-space:nowrap">${c.telefono ? `<a href="tel:${c.telefono}" style="color:var(--accent);text-decoration:none;font-weight:600">${formatPhone(c.telefono)}</a><a href="${whatsappUrl(c.telefono)}" target="_blank" title="Abrir WhatsApp" style="margin-left:6px;text-decoration:none">💬</a>` : '<span style="color:var(--text2)">—</span>'}</td>
         <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
         <td>${c.ultimaVisita || '—'}</td>
         <td style="text-align:center">${c.diasSinContacto || '—'}</td>
@@ -1652,12 +1719,14 @@ function renderListFromClients(clients) {
             <span style="font-size:11px;color:var(--text2)">⏱ ${c.diasSinContacto || '—'}d</span>
             ${c.frecuenciaIdeal ? `<span style="font-size:11px;color:var(--text2)">🔄 ${c.frecuenciaIdeal}d</span>` : ''}
             ${ticketStr ? `<span style="font-size:11px;color:var(--text2)">💰 ${ticketStr}</span>` : ''}
+            ${c.telefono ? `<span style="font-size:11px;color:var(--text2)">☎ ${formatPhone(c.telefono)}</span>` : ''}
             <span style="font-size:11px;color:${c._diasSinVenta === 0 ? '#16a34a' : '#ef4444'}">⏳ ${formatDiasSinVenta(c._diasSinVenta)} s/venta</span>
             ${c._visitasConsecSinVenta > 0 ? `<span style="font-size:11px;color:#ef4444">🚫 ${c._visitasConsecSinVenta} visitas s/venta</span>` : ''}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
           ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
+          ${c.telefono ? `<a href="tel:${c.telefono}" class="link-btn" style="font-size:16px" title="Llamar">☎</a><a href="${whatsappUrl(c.telefono)}" target="_blank" class="link-btn" style="font-size:16px" title="WhatsApp">💬</a>` : ''}
           <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
         </div>
       </div>`;
@@ -1679,14 +1748,13 @@ function openHistorial(codigo) {
   document.getElementById('modal-name').textContent = c.nombre;
   document.getElementById('modal-sub').textContent = `${c.direccion || ''} · ${c.comuna || ''}`;
   
-  // Visitas del cliente
-  // Cruce por nombre normalizado (principal) + fallback a client_code
+  // Visitas del cliente: RUT normalizado primario, code/nombre solo como respaldo
+  const _targetRut = c.rutNormalized || '';
   const _targetName = normName(c ? c.nombre : '');
   const visitas = visitasData.filter(v => {
-    // Intento 1: nombre normalizado
-    if (_targetName && normName(v['client_name']) === _targetName) return true;
-    // Fallback: client_code exacto
-    return (v['client_code'] || v['client_id']) == codigo;
+    if (_targetRut && normalizeRut(v['client_rut']) === _targetRut) return true;
+    if ((v['client_code'] || v['client_id']) == codigo) return true;
+    return !_targetRut && _targetName && normName(v['client_name']) === _targetName;
   })
     .sort((a,b) => {
       const da = parseDate(a['Fecha Visita'] || a['date']) || new Date(0);
@@ -1705,6 +1773,7 @@ function openHistorial(codigo) {
     <div class="modal-stat"><div class="modal-stat-val">$${Math.round(totalVentas).toLocaleString('es-CL')}</div><div class="modal-stat-lbl">Total comprado</div></div>
     <div class="modal-stat"><div class="modal-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div><div class="modal-stat-lbl">Frecuencia ideal</div></div>
     <div class="modal-stat"><div class="modal-stat-val">${formatDiasSinVenta(c._diasSinVenta)}</div><div class="modal-stat-lbl">Días sin venta</div></div>
+    <div class="modal-stat"><div class="modal-stat-val" style="font-size:14px">${formatPhone(c.telefono)}</div><div class="modal-stat-lbl">Teléfono</div>${c.telefono ? `<div style="display:flex;justify-content:center;gap:6px;margin-top:7px"><a href="tel:${c.telefono}" style="background:#2563eb;color:white;text-decoration:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700">Llamar</a><a href="${whatsappUrl(c.telefono)}" target="_blank" style="background:#16a34a;color:white;text-decoration:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700">WhatsApp</a></div>` : ''}</div>
     <div class="modal-stat"><div class="modal-stat-val">${c.diasFaltantes !== '' ? (c.diasFaltantes > 0 ? '+' : '') + c.diasFaltantes + 'd' : '—'}</div><div class="modal-stat-lbl">Días faltantes</div></div>
   `;
   
@@ -2251,6 +2320,7 @@ function exportExcel() {
     const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
     return [
       c.nombre || '',
+      c.telefono || '',
       c.direccion || '',
       c.comuna || '',
       c.vendedor || '',
@@ -2272,7 +2342,7 @@ function exportExcel() {
     ['Filtros aplicados:', filtrosStr],
     ['Total clientes:', clients.length],
     [],
-    ['Nombre', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin venta', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
+    ['Nombre', 'Teléfono', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin venta', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
     ...rows
   ];
 
@@ -2281,24 +2351,24 @@ function exportExcel() {
 
   // Ancho de columnas
   ws['!cols'] = [
-    {wch:35},{wch:30},{wch:18},{wch:18},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14},{wch:13},{wch:14},{wch:12},{wch:50}
+    {wch:35},{wch:17},{wch:30},{wch:18},{wch:18},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14},{wch:13},{wch:14},{wch:12},{wch:50}
   ];
 
   // Título en negrita (merge A1)
-  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:12}}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:13}}];
   if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
 
   // Encabezados en negrita (fila 6 = index 5)
-  ['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6','M6'].forEach(ref => {
+  ['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6','M6','N6'].forEach(ref => {
     if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
   });
 
-  // Hipervínculos Maps (fila 7 en adelante, columna M = index 12)
+  // Hipervínculos Maps (fila 7 en adelante, columna N = index 13)
   rows.forEach((row, i) => {
-    if (row[12]) {
-      const cellRef = XLSX.utils.encode_cell({r: 6 + i, c: 12});
+    if (row[13]) {
+      const cellRef = XLSX.utils.encode_cell({r: 6 + i, c: 13});
       if (ws[cellRef]) {
-        ws[cellRef].l = { Target: row[12], Tooltip: 'Ver en Maps' };
+        ws[cellRef].l = { Target: row[13], Tooltip: 'Ver en Maps' };
         ws[cellRef].v = '📍 Ver en Maps';
       }
     }
@@ -2354,6 +2424,7 @@ function exportPDF() {
     const mapsUrl = c.lat && c.lng ? `https://www.google.com/maps?q=${c.lat},${c.lng}` : '';
     return [
       c.nombre || '—',
+      c.telefono ? formatPhone(c.telefono) : '—',
       c.comuna || '—',
       c.vendedor || '—',
       STATUS_LABEL_MAP[st] || '—',
@@ -2368,24 +2439,25 @@ function exportPDF() {
 
   doc.autoTable({
     startY: startY,
-    head: [['Nombre', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/visita', 'Días s/venta', 'Frec.', 'Ticket', '📍']],
+    head: [['Nombre', 'Teléfono', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/visita', 'Días s/venta', 'Frec.', 'Ticket', '📍']],
     body: tableRows,
     styles: { fontSize: 7.5, cellPadding: 2, overflow: 'ellipsize' },
     headStyles: { fillColor: [79, 110, 247], textColor: 255, fontStyle: 'bold', fontSize: 8 },
     columnStyles: {
-      0: { cellWidth: 52 },
-      1: { cellWidth: 26 },
-      2: { cellWidth: 24 },
-      3: { cellWidth: 18 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 14 },
-      6: { cellWidth: 15 },
-      7: { cellWidth: 13 },
-      8: { cellWidth: 22 },
-      9: { cellWidth: 17 }
+      0: { cellWidth: 46 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 21 },
+      4: { cellWidth: 17 },
+      5: { cellWidth: 20 },
+      6: { cellWidth: 13 },
+      7: { cellWidth: 14 },
+      8: { cellWidth: 12 },
+      9: { cellWidth: 20 },
+      10: { cellWidth: 15 }
     },
     didParseCell: function(data) {
-      if (data.section === 'body' && data.column.index === 3) {
+      if (data.section === 'body' && data.column.index === 4) {
         const stLabel = data.cell.raw;
         const stKey = Object.keys(STATUS_LABEL_MAP).find(k => STATUS_LABEL_MAP[k] === stLabel);
         if (stKey) data.cell.styles.textColor = STATUS_COLOR_MAP[stKey];
@@ -2393,7 +2465,7 @@ function exportPDF() {
     },
     didDrawCell: function(data) {
       // Hipervínculo en columna Maps
-      if (data.section === 'body' && data.column.index === 9 && data.cell.raw === '📍 Maps') {
+      if (data.section === 'body' && data.column.index === 10 && data.cell.raw === '📍 Maps') {
         const c = clients[data.row.index];
         if (c && c.lat && c.lng) {
           const url = `https://www.google.com/maps?q=${c.lat},${c.lng}`;
