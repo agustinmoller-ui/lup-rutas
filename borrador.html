@@ -376,7 +376,9 @@ function cargarUsuariosYVerificar(){
         document.getElementById('denied').className='visible';
         return;
       }
-      userRol=u.rol;
+      // La cuenta propietaria siempre conserva rol administrador,
+      // aunque la fila Usuarios haya sido modificada accidentalmente.
+      userRol=(userEmail===ADMIN_EMAIL)?'admin':u.rol;
       actualizarUIAuth();
       cargarDatos();
     });
