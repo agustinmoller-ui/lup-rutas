@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Rutas LUP — BORRADOR</title>
+<title>Rutas LUP — BORRADOR v68</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -315,8 +315,8 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
 
 <script>
 var CLIENT_ID  = '178029436426-trd4kji63pmec5b24jndm0goqn5djmi0.apps.googleusercontent.com';
-var SHEETS_ID  = '1RBV2rNXpV_zrxmhQwS1U9w_7_upBlwxagLb-bCW6TNo';
-var SHEET_RUTAS= 'Rutas';
+var SHEETS_ID  = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
+var SHEET_RUTAS= "'Borrador Rutas'";
 var SHEET_USERS= 'Usuarios';
 var COLORES    = {C1:'#E74C3C',C2:'#3498DB',C3:'#2ECC71',C4:'#F39C12'};
 var BODEGA     = {lat:-33.4956,lng:-70.7193};
@@ -452,7 +452,7 @@ function cargarDatos(){
         var g=function(name){var i=colMap[name];if(i===undefined)return '';return(row[i]||'').toString().trim();};
         var lat=parseFloat(g('Lat')),lng=parseFloat(g('Lng'));
         if(isNaN(lat)||isNaN(lng)||lat===0||lng===0)return;
-        clientes.push({rowIdx:rowIdx+2,cod:g('Codigo'),nombre:g('Nombre'),direccion:g('Direccion'),comuna:g('Comuna'),ruta:g('Ruta_Original'),segmento:g('Segmento'),n_compras:parseInt(g('N_Compras'))||0,ticket:parseFloat(g('Ticket_Promedio'))||0,vendedor:g('Vendedor'),camion:g('Camion'),semana:parseInt(g('Semana'))||1,dia:g('Dia'),lat:lat,lng:lng});
+        clientes.push({rowIdx:rowIdx+2,cod:g('Codigo'),nombre:g('Nombre'),direccion:g('Direccion'),comuna:g('Comuna'),ruta:g('Ruta_Original'),segmento:g('Segmento'),n_compras:parseInt(g('N_Compras'))||0,ticket:parseFloat(g('Ticket_Promedio').replace(/[$,\s]/g,''))||0,vendedor:g('Vendedor'),camion:g('Camion'),semana:parseInt(g('Semana'))||1,dia:g('Dia'),lat:lat,lng:lng});
       });
       document.getElementById('sv_total').textContent=clientes.length;
       badge.className='ok';badge.textContent='✓ '+clientes.length;
