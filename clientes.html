@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
-<title>LUP — Clientes v42</title><!-- build:20260813_114500 -->
+<title>LUP — Clientes v66</title><!-- build:20260815_151000 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -513,7 +513,7 @@
     <div id="shared-filter" style="padding:4px 8px 5px 8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
     <input type="text" id="shared-search" placeholder="🔍 Buscar cliente..." oninput="applySharedFilter()"
       style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px">
       <!-- Dropdown checkbox: Comuna -->
       <div class="dd-wrap" id="dd-comuna">
         <button class="dd-btn" onclick="toggleDropdown('dd-comuna',event)">
@@ -558,6 +558,32 @@
             <input type="checkbox" id="dd-all-vendedor" checked onchange="toggleAllDD('vendedor')"> Todos
           </label>
           <div id="dd-list-vendedor"></div>
+        </div>
+      </div>
+      <!-- Dropdown checkbox: Sigue / No Sigue -->
+      <div class="dd-wrap" id="dd-seguimiento">
+        <button class="dd-btn" onclick="toggleDropdown('dd-seguimiento',event)">
+          <span class="dd-label" id="dd-label-seguimiento">Seguimiento</span>
+          <span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="dd-panel-seguimiento">
+          <label class="dd-item dd-all">
+            <input type="checkbox" id="dd-all-seguimiento" checked onchange="toggleAllDD('seguimiento')"> Todos
+          </label>
+          <div id="dd-list-seguimiento"></div>
+        </div>
+      </div>
+      <!-- Dropdown checkbox: Tipo de seguimiento -->
+      <div class="dd-wrap" id="dd-tipo">
+        <button class="dd-btn" onclick="toggleDropdown('dd-tipo',event)">
+          <span class="dd-label" id="dd-label-tipo">Tipo</span>
+          <span class="dd-arrow">▾</span>
+        </button>
+        <div class="dd-panel" id="dd-panel-tipo">
+          <label class="dd-item dd-all">
+            <input type="checkbox" id="dd-all-tipo" checked onchange="toggleAllDD('tipo')"> Todos
+          </label>
+          <div id="dd-list-tipo"></div>
         </div>
       </div>
     </div>
@@ -791,6 +817,7 @@
           <tbody id="modal-hist-body"></tbody>
         </table>
       </div>
+      <div id="modal-comments" style="margin-top:14px"></div>
     </div>
   </div>
 </div>
@@ -929,6 +956,10 @@ function precomputeClientMetrics() {
 
   clientsByNormName = {};
   clientsByRut = {};
+  const clientRutCounts = {};
+  Object.values(allClientsMap).forEach(c => {
+    if (c.rutNormalized) clientRutCounts[c.rutNormalized] = (clientRutCounts[c.rutNormalized] || 0) + 1;
+  });
   Object.values(allClientsMap).forEach(c => {
     const nm = normName(c.nombre);
     if (nm) clientsByNormName[nm] = c;
@@ -940,7 +971,9 @@ function precomputeClientMetrics() {
       clientsByRut[c.rutNormalized] = c;
       c.telefono = phoneByRut[c.rutNormalized] || c.telefono || '';
     }
-    const visitas = (visByRut[c.rutNormalized] || visByName[nm] || visByCode[c.codigo] || [])
+    c._useCodeMatch = !!(c.rutNormalized && clientRutCounts[c.rutNormalized] > 1 && visByCode[c.codigo] && visByCode[c.codigo].length);
+    const visitas = (c._useCodeMatch ? visByCode[c.codigo] : (visByRut[c.rutNormalized] || visByName[nm] || visByCode[c.codigo] || []))
+      .slice()
       .sort((a,b) => (parseDate(b['Fecha Visita'])||new Date(0)) - (parseDate(a['Fecha Visita'])||new Date(0)));
     
     // Último tipo de visita
@@ -980,7 +1013,9 @@ async function loadData(force = false) {
   try {
     // Cargar datos operativos y teléfonos en paralelo
     const [data, phones] = await Promise.all([loadFromBackend(force), loadPhonesFromBackend(force)]);
-    seguimientoData = data.seguimiento || [];
+    // La fuente auxiliar entrega la hoja completa A:V (1.063 filas). Si no está disponible,
+    // se usa el endpoint principal como respaldo.
+    seguimientoData = (phones.seguimiento && phones.seguimiento.length) ? phones.seguimiento : (data.seguimiento || []);
     rutasData = data.rutas || [];
     visitasData = data.visitas || [];
     telefonosData = phones.telefonos || [];
@@ -1152,6 +1187,15 @@ function whatsappUrl(value) {
   return digits ? 'https://wa.me/' + digits : '';
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Normaliza nombre para cruce tolerante a variantes
 function normName(n) {
   if (!n) return '';
@@ -1165,132 +1209,63 @@ function normName(n) {
 function buildAllClientsMap() {
   allClientsMap = {};
 
-  // 1. Primero cargar TODOS los clientes de Rutas (todos los 841 activos) como base "gris"
+  // La hoja Clientes seguimiento es la fuente autoritativa del universo completo.
+  // Rutas solo enriquece camion/día/semana cuando existe coincidencia de código.
+  const routeByCode = {};
   rutasData.forEach(r => {
     const code = String(r['Codigo'] || r['A'] || '').trim();
-    if (!code) return;
-    const lat = parseFloat(r['Lat'] || r['M']);
-    const lng = parseFloat(r['Lng'] || r['N']);
-    const phoneRecord = phoneByCode[code] || {};
-    allClientsMap[code] = {
-      codigo: code,
-      nombre: r['Nombre'] || r['B'] || '',
-      direccion: r['Direccion'] || r['C'] || '',
-      comuna: normalizeComuna(r['Comuna'] || r['D'] || ''),
-      lat: isNaN(lat) ? null : lat,
-      lng: isNaN(lng) ? null : lng,
-      camion: r['Camion'] || r['J'] || '',
-      vendedorRuta: r['Vendedor'] || r['I'] || '',
-      dia: r['Dia'] || r['L'] || '',
-      semana: r['Semana'] || r['K'] || '',
-      rutNormalized: phoneRecord.rut || '',
-      telefono: phoneRecord.telefono || '',
-      // Datos de seguimiento (se llenan abajo si existe)
-      ultimaVisita: '',
-      ultimaCompra: '',
-      diasSinContacto: null,
-      ticketPromedio: 0,
-      vendedor: '',
-      frecuenciaIdeal: null,
-      diasFaltantes: null,
-      kmUltimo: '',
-      enSeguimiento: false,
-      visitas: []
-    };
+    if (code && !routeByCode[code]) routeByCode[code] = r;
   });
 
-  // 2. Merge con datos de Clientes seguimiento (los 841 con métricas calculadas)
-  seguimientoData.forEach(cs => {
+  const codeOccurrences = {};
+  seguimientoData.forEach((cs, index) => {
     const code = String(cs['Codigo'] || '').trim();
     if (!code) return;
-    
+    codeOccurrences[code] = (codeOccurrences[code] || 0) + 1;
+    const mapKey = codeOccurrences[code] === 1 ? code : `${code}__${codeOccurrences[code]}`;
+    const route = routeByCode[code] || {};
     const lat = parseFloat(cs['Lat']);
     const lng = parseFloat(cs['Lng']);
-    let ticketNum = 0;
-    const ticketStr = String(cs['Ticket_Promedio'] || '');
-    // Formato: "$22,186.43" — quitar $ y separadores de miles (,), dejar punto decimal
-    ticketNum = parseFloat(ticketStr.replace(/[$,\s]/g, '')) || 0;
-    const diasRaw = String(cs['Días Faltantes'] || '').replace(/,/g,''); const dias = diasRaw !== '' ? parseFloat(diasRaw) : null;
+    const ticketNum = parseFloat(String(cs['Ticket_Promedio'] || '').replace(/[$,\s]/g, '')) || 0;
+    const diasRaw = String(cs['Días Faltantes'] || '').replace(/,/g, '');
+    const dias = diasRaw !== '' ? parseFloat(diasRaw) : null;
+    const diasCompraRaw = String(cs['N° días sin compra'] || '').replace(/,/g, '');
+    const diasSinCompra = diasCompraRaw !== '' && !isNaN(parseFloat(diasCompraRaw)) ? parseFloat(diasCompraRaw) : null;
+    const rutSheet = normalizeRut(cs['RUT']);
+    const phoneSheet = normalizePhone(cs['Telefono']);
+    const phoneRecord = phoneByCode[code] || {};
 
-    if (allClientsMap[code]) {
-      Object.assign(allClientsMap[code], {
-        nombre: cs['Nombre'] || allClientsMap[code].nombre,
-        direccion: cs['Direccion'] || allClientsMap[code].direccion,
-        comuna: normalizeComuna(cs['Comuna'] || allClientsMap[code].comuna),
-        lat: isNaN(lat) ? allClientsMap[code].lat : lat,
-        lng: isNaN(lng) ? allClientsMap[code].lng : lng,
-        ultimaVisita: cs['Última Visita'] || '',
-        ultimaCompra: cs['última compra'] || '',
-        diasSinContacto: cs['Días último contacto'] !== '' ? parseFloat(cs['Días último contacto']) : null,
-        ticketPromedio: ticketNum,
-        vendedor: cs['último vendedor'] || '',
-        frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
-        diasFaltantes: isNaN(dias) ? null : dias,
-        kmUltimo: cs['Km desde último contacto'] || '',
-        telefono: (phoneByCode[code] || {}).telefono || allClientsMap[code].telefono || '',
-        rutNormalized: (phoneByCode[code] || {}).rut || allClientsMap[code].rutNormalized || '',
-        enSeguimiento: true
-      });
-    } else {
-      // Está en seguimiento pero no en rutas (raro, lo agregamos igual)
-      allClientsMap[code] = {
-        codigo: code,
-        nombre: cs['Nombre'] || '',
-        direccion: cs['Direccion'] || '',
-        comuna: normalizeComuna(cs['Comuna'] || ''),
-        lat: isNaN(lat) ? null : lat,
-        lng: isNaN(lng) ? null : lng,
-        camion: '', vendedorRuta: '', dia: '', semana: '',
-        ultimaVisita: cs['Última Visita'] || '',
-        ultimaCompra: cs['última compra'] || '',
-        diasSinContacto: cs['Días último contacto'] !== '' ? parseFloat(cs['Días último contacto']) : null,
-        ticketPromedio: ticketNum,
-        vendedor: cs['último vendedor'] || '',
-        frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
-        diasFaltantes: isNaN(dias) ? null : dias,
-        kmUltimo: cs['Km desde último contacto'] || '',
-        telefono: (phoneByCode[code] || {}).telefono || '',
-        rutNormalized: (phoneByCode[code] || {}).rut || '',
-        enSeguimiento: true,
-        visitas: []
-      };
-    }
-  });
-
-  // 3. Agregar clientes de visitasData que no están en seguimiento ni en rutas
-  //    (clientes del universo total que han comprado alguna vez)
-  const clientesVistos = new Set();
-  visitasData.forEach(v => {
-    const code = String(v['client_code'] || v['client_id'] || '').trim();
-    if (!code || allClientsMap[code]) return;
-    if (clientesVistos.has(code)) return;
-    clientesVistos.add(code);
-    const lat = parseFloat(v['address_latitude'] || v['lat_cliente'] || '');
-    const lng = parseFloat(v['address_longitude'] || v['lng_cliente'] || '');
-    if (isNaN(lat) || isNaN(lng)) return; // sin coords no se puede pintar en mapa
-    allClientsMap[code] = {
+    allClientsMap[mapKey] = {
+      mapKey,
       codigo: code,
-      nombre: v['client_name'] || '',
-      direccion: v['address_street'] || v['address'] || '',
-      comuna: normalizeComuna(v['locality'] || ''),
-      lat, lng,
-      camion: '', vendedorRuta: '', dia: '', semana: '',
-      ultimaVisita: v['Fecha Visita'] || v['date'] || '',
-      ultimaCompra: '',
-      diasSinContacto: null,
-      ticketPromedio: 0,
-      vendedor: v['salesman_name'] || '',
-      frecuenciaIdeal: null,
-      diasFaltantes: null,
-      kmUltimo: '',
-      rutNormalized: normalizeRut(v['client_rut']),
-      telefono: phoneByRut[normalizeRut(v['client_rut'])] || '',
-      enSeguimiento: false,
+      nombre: cs['Nombre'] || route['Nombre'] || route['B'] || '',
+      direccion: cs['Direccion'] || route['Direccion'] || route['C'] || '',
+      comuna: normalizeComuna(cs['Comuna'] || route['Comuna'] || route['D'] || ''),
+      lat: isNaN(lat) ? null : lat,
+      lng: isNaN(lng) ? null : lng,
+      camion: route['Camion'] || route['J'] || '',
+      vendedorRuta: route['Vendedor'] || route['I'] || '',
+      dia: route['Dia'] || route['L'] || '',
+      semana: route['Semana'] || route['K'] || '',
+      ultimaVisita: cs['Última Visita'] || '',
+      ultimaCompra: cs['última compra'] || '',
+      diasSinCompra,
+      diasSinContacto: cs['Días último contacto'] !== '' ? parseFloat(cs['Días último contacto']) : null,
+      ticketPromedio: ticketNum,
+      vendedor: cs['último vendedor'] || '',
+      frecuenciaIdeal: cs['Frecuencia Ideal'] !== '' ? parseFloat(cs['Frecuencia Ideal']) : null,
+      diasFaltantes: isNaN(dias) ? null : dias,
+      kmUltimo: cs['Km desde último contacto'] || '',
+      ultimoComentario: cs['Último comentario'] || '',
+      seguimientoEstado: cs['Sigue / No Sigue'] || 'Sigue',
+      tipoSeguimiento: cs['Tipo de seguimiento'] || '',
+      telefono: phoneSheet || phoneRecord.telefono || phoneByRut[rutSheet] || '',
+      rutNormalized: rutSheet || phoneRecord.rut || '',
+      enSeguimiento: true,
       visitas: []
     };
   });
 }
-
 // ============================================================
 // INIT FILTERS
 // ============================================================
@@ -1321,6 +1296,7 @@ function initFilters() {
   const clients = Object.values(allClientsMap);
   const comunas = [...new Set(clients.map(c => c.comuna).filter(Boolean))].sort();
   const vendedores = [...new Set(clients.map(c => c.vendedor).filter(Boolean))].sort();
+  const tiposSeguimiento = [...new Set(clients.map(c => c.tipoSeguimiento).filter(Boolean))].sort();
   
   ['map-comuna','list-comuna'].forEach(id => {
     const sel = document.getElementById(id);
@@ -1330,8 +1306,10 @@ function initFilters() {
   });
   // Poblar dropdown checkbox de comunas
   populateDD('comuna', comunas);
-  // Poblar dropdown checkbox de vendedores
+  // Poblar dropdowns de clasificación
   populateDD('vendedor', vendedores);
+  populateDD('seguimiento', ['Sigue', 'No Sigue']);
+  populateDD('tipo', tiposSeguimiento);
 
   // Mantener selects legacy (mapa/lista) para compatibilidad
   ['map-vendedor','list-vendedor'].forEach(id => {
@@ -1417,7 +1395,7 @@ function updateDDLabel(type) {
   const labelEl = document.getElementById('dd-label-' + type);
   if (!labelEl) return;
   if (selected.length === 0) {
-    const defaults = { comuna: 'Comunas', status: 'Estado', vendedor: 'Vendedor' };
+    const defaults = { comuna: 'Comunas', status: 'Estado', vendedor: 'Vendedor', seguimiento: 'Seguimiento', tipo: 'Tipo' };
     labelEl.textContent = defaults[type] || 'Todos';
   } else if (selected.length === 1) {
     labelEl.textContent = selected[0];
@@ -1466,6 +1444,8 @@ function getSharedFilters() {
     comunas:   getDDValues('comuna'),
     statuses:  getDDValues('status'),
     vendedores: getDDValues('vendedor'),
+    seguimientos: getDDValues('seguimiento'),
+    tiposSeguimiento: getDDValues('tipo'),
     minTicket: parseInt(document.getElementById('shared-ticket-slider')?.value) || 0,
     minDias:   parseInt(document.getElementById('shared-dias-slider')?.value) || 0,
     minDiasSinVenta: parseInt(document.getElementById('shared-dsv-slider')?.value) || 0,
@@ -1479,11 +1459,15 @@ function getFilteredClients(filters) {
   const comunas    = f.comunas    || (f.comuna   ? [f.comuna]   : []);
   const statuses   = f.statuses   || (f.status   ? [f.status]   : []);
   const vendedores = f.vendedores || (f.vendedor  ? [f.vendedor] : []);
+  const seguimientos = f.seguimientos || [];
+  const tiposSeguimiento = f.tiposSeguimiento || [];
   const result = Object.values(allClientsMap).filter(c => {
     if (!c.enSeguimiento) return false;
     if (f.search && !c.nombre.toLowerCase().includes(f.search) && !c.codigo.toLowerCase().includes(f.search)) return false;
     if (comunas.length    && !comunas.includes(c.comuna))    return false;
     if (vendedores.length && !vendedores.includes(c.vendedor)) return false;
+    if (seguimientos.length && !seguimientos.includes(c.seguimientoEstado)) return false;
+    if (tiposSeguimiento.length && !tiposSeguimiento.includes(c.tipoSeguimiento)) return false;
     const st = getStatusFromDias(c.diasFaltantes, c.enSeguimiento);
     if (statuses.length   && !statuses.includes(st))          return false;
     if (f.minTicket > 0 && (c.ticketPromedio||0) < f.minTicket) return false;
@@ -1526,6 +1510,10 @@ function renderCalugas(clients) {
   const promDiasSin = clientsConDias.length
     ? Math.round(clientsConDias.reduce((s,c) => s + parseFloat(c.diasSinContacto), 0) / clientsConDias.length)
     : 0;
+  const clientsConCompra = clients.filter(c => Number.isFinite(c.diasSinCompra));
+  const promDiasSinCompra = clientsConCompra.length
+    ? Math.round(clientsConCompra.reduce((s,c) => s + c.diasSinCompra, 0) / clientsConCompra.length)
+    : 0;
   const clientsConTicket = clients.filter(c => c.ticketPromedio > 0);
   const promTicket = clientsConTicket.length
     ? Math.round(clientsConTicket.reduce((s,c) => s + c.ticketPromedio, 0) / clientsConTicket.length)
@@ -1562,6 +1550,7 @@ function renderCalugas(clients) {
     '<div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch;margin:2px 3px"></div>' +
     chipWide('⏰ '+totalFueraFrecuencia+' ('+pctAlerta+'%)', 'fuera frecuencia', '#eab308') +
     chipWide('📅 '+promDiasSin+'d', 'prom. sin visita', '#64748b') +
+    chipWide('🛒 '+promDiasSinCompra+'d', 'prom. sin compra', '#8b5cf6') +
     chipWide('💰 $'+promTicket.toLocaleString('es-CL'), 'ticket prom.', '#3b82f6') +
     chipWide('🚫 '+visitasSinVenta+' últ.vis.', 'sin compra', '#ef4444') +
     chipWide('💸 $'+(ventasPerdidas>=1000000 ? (ventasPerdidas/1000000).toFixed(1).replace('.',',')+'MM' : Math.round(ventasPerdidas/1000).toLocaleString('es-CL')+'K'), 'ventas perdidas est.', '#dc2626');
@@ -1592,7 +1581,7 @@ function renderMapMarkersFromClients(clients) {
     const marker = L.marker([c.lat, c.lng], { icon: makeMarkerIcon(st, 12) });
     const diasStr = c.diasFaltantes !== '' ? `${c.diasFaltantes > 0 ? '+' : ''}${c.diasFaltantes} días` : '—';
     const ticketStr = c.ticketPromedio ? `$${Math.round(c.ticketPromedio).toLocaleString('es-CL')}` : '—';
-    marker.bindPopup(`<div class="popup-inner"><div class="popup-name">${c.nombre}</div><div class="popup-addr">${c.direccion || c.comuna}</div><div class="popup-grid"><div class="popup-stat"><div class="popup-stat-label">Última visita</div><div class="popup-stat-val">${c.ultimaVisita || '—'}</div></div><div class="popup-stat"><div class="popup-stat-label">Días falt.</div><div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Ticket</div><div class="popup-stat-val">${ticketStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Días sin venta</div><div class="popup-stat-val">${formatDiasSinVenta(c._diasSinVenta)}</div></div><div class="popup-stat"><div class="popup-stat-label">Frecuencia</div><div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div></div></div><div class="popup-actions">${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}<button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.codigo}')">📋 Historial</button></div></div>`, { maxWidth: 280 });
+    marker.bindPopup(`<div class="popup-inner"><div class="popup-name">${c.nombre}</div><div class="popup-addr">${c.direccion || c.comuna}</div><div class="popup-grid"><div class="popup-stat"><div class="popup-stat-label">Última visita</div><div class="popup-stat-val">${c.ultimaVisita || '—'}</div></div><div class="popup-stat"><div class="popup-stat-label">Días falt.</div><div class="popup-stat-val" style="color:${STATUS_COLORS[st]}">${diasStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Ticket</div><div class="popup-stat-val">${ticketStr}</div></div><div class="popup-stat"><div class="popup-stat-label">Días sin venta</div><div class="popup-stat-val">${formatDiasSinVenta(c._diasSinVenta)}</div></div><div class="popup-stat"><div class="popup-stat-label">Frecuencia</div><div class="popup-stat-val">${c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—'}</div></div></div><div class="popup-actions">${c.lat ? `<button class="popup-btn popup-btn-maps" onclick="window.open('https://www.google.com/maps?q=${c.lat},${c.lng}','_blank')">📍 Maps</button>` : ''}<button class="popup-btn popup-btn-hist" onclick="openHistorial('${c.mapKey || c.codigo}')">📋 Historial</button></div></div>`, { maxWidth: 280 });
     marker.addTo(map);
     markers.push(marker);
   });
@@ -1679,7 +1668,7 @@ function renderListFromClients(clients) {
     const tStr = ticketStr || '<span style="color:#94a3b8;font-size:11px">sin compras</span>';
     return `
       <tr style="${nuncaCompro ? 'opacity:0.7' : ''}">
-        <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''}</div></td>
+        <td><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nombre}${nuncaCompro ? ' <span style=\"font-size:10px;background:rgba(100,116,139,0.15);color:#64748b;border-radius:4px;padding:1px 5px\">sin compras</span>' : ''}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${c.comuna || ''} · ${c.vendedor || ''} · ${c.seguimientoEstado || '—'} · ${c.tipoSeguimiento || '—'}</div></td>
         <td style="white-space:nowrap">${c.telefono ? `<a href="tel:${c.telefono}" style="color:var(--accent);text-decoration:none;font-weight:600">${formatPhone(c.telefono)}</a><a href="${whatsappUrl(c.telefono)}" target="_blank" title="Abrir WhatsApp" style="margin-left:6px;text-decoration:none">💬</a>` : '<span style="color:var(--text2)">—</span>'}</td>
         <td><span class="${badgeClass}">${diasStr} ${STATUS_LABELS[st]}</span></td>
         <td>${c.ultimaVisita || '—'}</td>
@@ -1690,7 +1679,7 @@ function renderListFromClients(clients) {
         <td>
           <div style="display:flex;gap:6px">
             ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn">📍</a>` : ''}
-            <button class="hist-btn" onclick="openHistorial('${c.codigo}')">Historial</button>
+            <button class="hist-btn" onclick="openHistorial('${c.mapKey || c.codigo}')">Historial</button>
           </div>
         </td>
       </tr>`;
@@ -1712,7 +1701,7 @@ function renderListFromClients(clients) {
       return `<div class="alert-card" style="border-left:3px solid ${stColor}">
         <div class="alert-info">
           <div class="alert-name">${c.nombre}</div>
-          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'}</div>
+          <div class="alert-detail">${c.comuna || '—'} · ${c.vendedor || '—'} · ${c.seguimientoEstado || '—'} · ${c.tipoSeguimiento || '—'}</div>
           <div style="display:flex;gap:8px;margin-top:5px;flex-wrap:wrap;align-items:center">
             <span class="${badgeClass}" style="font-size:11px">${diasStr} ${STATUS_LABELS[st]}</span>
             <span style="font-size:11px;color:var(--text2)">📅 ${c.ultimaVisita || 'Sin visita'}</span>
@@ -1727,7 +1716,7 @@ function renderListFromClients(clients) {
         <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;align-items:center">
           ${c.lat ? `<a href="https://www.google.com/maps?q=${c.lat},${c.lng}" target="_blank" class="link-btn" style="font-size:18px">📍</a>` : ''}
           ${c.telefono ? `<a href="tel:${c.telefono}" class="link-btn" style="font-size:16px" title="Llamar">☎</a><a href="${whatsappUrl(c.telefono)}" target="_blank" class="link-btn" style="font-size:16px" title="WhatsApp">💬</a>` : ''}
-          <button class="hist-btn" onclick="openHistorial('${c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
+          <button class="hist-btn" onclick="openHistorial('${c.mapKey || c.codigo}')" style="font-size:13px;padding:3px 8px">📋</button>
         </div>
       </div>`;
     }).join('');
@@ -1752,8 +1741,11 @@ function openHistorial(codigo) {
   const _targetRut = c.rutNormalized || '';
   const _targetName = normName(c ? c.nombre : '');
   const visitas = visitasData.filter(v => {
-    if (_targetRut && normalizeRut(v['client_rut']) === _targetRut) return true;
-    if ((v['client_code'] || v['client_id']) == codigo) return true;
+    const visitRut = normalizeRut(v['client_rut']);
+    const visitCode = String(v['client_code'] || v['client_id'] || '').trim();
+    if (c._useCodeMatch) return visitRut === _targetRut && visitCode === c.codigo;
+    if (_targetRut && visitRut === _targetRut) return true;
+    if (visitCode === c.codigo) return true;
     return !_targetRut && _targetName && normName(v['client_name']) === _targetName;
   })
     .sort((a,b) => {
@@ -1839,6 +1831,17 @@ function openHistorial(codigo) {
       <td>${monto ? '$' + Math.round(monto).toLocaleString('es-CL') : '—'}</td>
     </tr>`;
   }).join('');
+
+  // Comentarios de visitas, visibles debajo de la tabla histórica.
+  const commentsEl = document.getElementById('modal-comments');
+  const visitasConComentario = visitasSlice.filter(v => String(v['comments'] || '').trim());
+  commentsEl.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">Comentarios de visitas (${visitasConComentario.length})</div>
+    ${visitasConComentario.length ? visitasConComentario.map(v => `
+      <div style="padding:9px 10px;margin-bottom:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+        <div style="font-size:10px;color:var(--text2);margin-bottom:4px">${escapeHtml(v['Fecha Visita'] || '—')} · ${escapeHtml(v['salesman_name'] || '—')} · ${escapeHtml(v['Visita/Venta'] || 'Visita')}</div>
+        <div style="font-size:12px;color:var(--text);line-height:1.4;white-space:pre-wrap">${escapeHtml(v['comments'])}</div>
+      </div>`).join('') : '<div style="font-size:12px;color:var(--text2);padding:8px 0">Sin comentarios registrados.</div>'}`;
   
   // Guardar estado del filtro antes de abrir el modal
   const sf0 = document.getElementById('shared-filter');
@@ -2230,7 +2233,7 @@ function openHistorialByName(nombre) {
   if (!nombre) return;
   const nm = normName(nombre);
   const cliente = Object.values(allClientsMap).find(c => normName(c.nombre) === nm);
-  if (cliente) openHistorial(cliente.codigo);
+  if (cliente) openHistorial(cliente.mapKey || cliente.codigo);
 }
 
 
@@ -2305,6 +2308,8 @@ function exportExcel() {
   if (f.comunas && f.comunas.length) filtrosActivos.push('Comuna: ' + f.comunas.join(', '));
   if (f.statuses && f.statuses.length) filtrosActivos.push('Estado: ' + f.statuses.join(', '));
   if (f.vendedores && f.vendedores.length) filtrosActivos.push('Vendedor: ' + f.vendedores.join(', '));
+  if (f.seguimientos && f.seguimientos.length) filtrosActivos.push('Seguimiento: ' + f.seguimientos.join(', '));
+  if (f.tiposSeguimiento && f.tiposSeguimiento.length) filtrosActivos.push('Tipo: ' + f.tiposSeguimiento.join(', '));
   if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
   if (f.minDias > 0) filtrosActivos.push('Días sin visita ≥: ' + f.minDias);
   if (f.minDiasSinVenta > 0) filtrosActivos.push('Días sin venta ≥: ' + f.minDiasSinVenta);
@@ -2324,12 +2329,14 @@ function exportExcel() {
       c.direccion || '',
       c.comuna || '',
       c.vendedor || '',
+      c.seguimientoEstado || '',
+      c.tipoSeguimiento || '',
       STATUS_LABEL_MAP[st] || '',
       c.diasSinContacto || '',
       c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '',
       c.diasFaltantes !== null && c.diasFaltantes !== undefined ? c.diasFaltantes : '',
       c.ultimaVisita || '',
-      c._diasSinVenta !== null && c._diasSinVenta !== undefined ? c._diasSinVenta : '',
+      Number.isFinite(c.diasSinCompra) ? c.diasSinCompra : '',
       c.ticketPromedio ? Math.round(c.ticketPromedio) : 0,
       c._visitasConsecSinVenta || 0,
       mapsUrl
@@ -2342,7 +2349,7 @@ function exportExcel() {
     ['Filtros aplicados:', filtrosStr],
     ['Total clientes:', clients.length],
     [],
-    ['Nombre', 'Teléfono', 'Dirección', 'Comuna', 'Vendedor', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin venta', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
+    ['Nombre', 'Teléfono', 'Dirección', 'Comuna', 'Vendedor', 'Seguimiento', 'Tipo seguimiento', 'Estado', 'Días sin contacto', 'Frec. ideal', 'Días faltantes', 'Última visita', 'Días sin compra', 'Ticket prom. ($)', 'Visitas s/venta', 'Maps'],
     ...rows
   ];
 
@@ -2351,24 +2358,24 @@ function exportExcel() {
 
   // Ancho de columnas
   ws['!cols'] = [
-    {wch:35},{wch:17},{wch:30},{wch:18},{wch:18},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14},{wch:13},{wch:14},{wch:12},{wch:50}
+    {wch:35},{wch:17},{wch:30},{wch:18},{wch:18},{wch:13},{wch:18},{wch:12},{wch:14},{wch:10},{wch:12},{wch:14},{wch:13},{wch:14},{wch:12},{wch:50}
   ];
 
   // Título en negrita (merge A1)
-  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:13}}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:15}}];
   if (ws['A1']) ws['A1'].s = { font: { bold: true, sz: 14 } };
 
   // Encabezados en negrita (fila 6 = index 5)
-  ['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6','M6','N6'].forEach(ref => {
+  ['A6','B6','C6','D6','E6','F6','G6','H6','I6','J6','K6','L6','M6','N6','O6','P6'].forEach(ref => {
     if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E2E8F0' } } };
   });
 
-  // Hipervínculos Maps (fila 7 en adelante, columna N = index 13)
+  // Hipervínculos Maps (fila 7 en adelante, columna P = index 15)
   rows.forEach((row, i) => {
-    if (row[13]) {
-      const cellRef = XLSX.utils.encode_cell({r: 6 + i, c: 13});
+    if (row[15]) {
+      const cellRef = XLSX.utils.encode_cell({r: 6 + i, c: 15});
       if (ws[cellRef]) {
-        ws[cellRef].l = { Target: row[13], Tooltip: 'Ver en Maps' };
+        ws[cellRef].l = { Target: row[15], Tooltip: 'Ver en Maps' };
         ws[cellRef].v = '📍 Ver en Maps';
       }
     }
@@ -2393,6 +2400,8 @@ function exportPDF() {
   if (f.comunas && f.comunas.length) filtrosActivos.push('Comuna: ' + f.comunas.join(', '));
   if (f.statuses && f.statuses.length) filtrosActivos.push('Estado: ' + f.statuses.join(', '));
   if (f.vendedores && f.vendedores.length) filtrosActivos.push('Vendedor: ' + f.vendedores.join(', '));
+  if (f.seguimientos && f.seguimientos.length) filtrosActivos.push('Seguimiento: ' + f.seguimientos.join(', '));
+  if (f.tiposSeguimiento && f.tiposSeguimiento.length) filtrosActivos.push('Tipo: ' + f.tiposSeguimiento.join(', '));
   if (f.minTicket > 0) filtrosActivos.push('Ticket mín: $' + f.minTicket.toLocaleString('es-CL'));
   if (f.minDias > 0) filtrosActivos.push('Días sin visita ≥: ' + f.minDias);
   if (f.minDiasSinVenta > 0) filtrosActivos.push('Días sin venta ≥: ' + f.minDiasSinVenta);
@@ -2427,10 +2436,12 @@ function exportPDF() {
       c.telefono ? formatPhone(c.telefono) : '—',
       c.comuna || '—',
       c.vendedor || '—',
+      c.seguimientoEstado || '—',
+      c.tipoSeguimiento || '—',
       STATUS_LABEL_MAP[st] || '—',
       c.ultimaVisita || '—',
       c.diasSinContacto || '—',
-      formatDiasSinVenta(c._diasSinVenta),
+      Number.isFinite(c.diasSinCompra) ? c.diasSinCompra : '—',
       c.frecuenciaIdeal ? c.frecuenciaIdeal + 'd' : '—',
       c.ticketPromedio ? '$' + Math.round(c.ticketPromedio).toLocaleString('es-CL') : '—',
       mapsUrl ? '📍 Maps' : '—'
@@ -2439,25 +2450,27 @@ function exportPDF() {
 
   doc.autoTable({
     startY: startY,
-    head: [['Nombre', 'Teléfono', 'Comuna', 'Vendedor', 'Estado', 'Última visita', 'Días s/visita', 'Días s/venta', 'Frec.', 'Ticket', '📍']],
+    head: [['Nombre', 'Teléfono', 'Comuna', 'Vendedor', 'Seguim.', 'Tipo', 'Estado', 'Última visita', 'Días s/visita', 'Días s/compra', 'Frec.', 'Ticket', '📍']],
     body: tableRows,
     styles: { fontSize: 7.5, cellPadding: 2, overflow: 'ellipsize' },
     headStyles: { fillColor: [79, 110, 247], textColor: 255, fontStyle: 'bold', fontSize: 8 },
     columnStyles: {
-      0: { cellWidth: 46 },
-      1: { cellWidth: 22 },
-      2: { cellWidth: 22 },
-      3: { cellWidth: 21 },
-      4: { cellWidth: 17 },
-      5: { cellWidth: 20 },
-      6: { cellWidth: 13 },
-      7: { cellWidth: 14 },
+      0: { cellWidth: 40 },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 18 },
+      4: { cellWidth: 15 },
+      5: { cellWidth: 18 },
+      6: { cellWidth: 14 },
+      7: { cellWidth: 18 },
       8: { cellWidth: 12 },
-      9: { cellWidth: 20 },
-      10: { cellWidth: 15 }
+      9: { cellWidth: 13 },
+      10: { cellWidth: 10 },
+      11: { cellWidth: 19 },
+      12: { cellWidth: 12 }
     },
     didParseCell: function(data) {
-      if (data.section === 'body' && data.column.index === 4) {
+      if (data.section === 'body' && data.column.index === 6) {
         const stLabel = data.cell.raw;
         const stKey = Object.keys(STATUS_LABEL_MAP).find(k => STATUS_LABEL_MAP[k] === stLabel);
         if (stKey) data.cell.styles.textColor = STATUS_COLOR_MAP[stKey];
@@ -2465,7 +2478,7 @@ function exportPDF() {
     },
     didDrawCell: function(data) {
       // Hipervínculo en columna Maps
-      if (data.section === 'body' && data.column.index === 10 && data.cell.raw === '📍 Maps') {
+      if (data.section === 'body' && data.column.index === 12 && data.cell.raw === '📍 Maps') {
         const c = clients[data.row.index];
         if (c && c.lat && c.lng) {
           const url = `https://www.google.com/maps?q=${c.lat},${c.lng}`;
