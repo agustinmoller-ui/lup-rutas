@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Rutas LUP — BORRADOR v69.1</title>
+<title>Rutas LUP — BORRADOR v69.2</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -288,6 +288,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
     <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Miercoles')">Mié</button>
     <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Jueves')">Jue</button>
     <button class="sel-btn" style="background:#555" onclick="aplicarMasivo('dia','Viernes')">Vie</button>
+    <button class="sel-btn" style="background:#334" onclick="aplicarMasivo('dia','')">Sin asignar</button>
   </div>
   <button id="sel-cancel" onclick="cancelarSeleccion()">✕ Cancelar</button>
 </div>
@@ -310,7 +311,7 @@ select { background:#0f3460; color:#fff; border:1px solid #334; border-radius:20
       <select id="m-semana"><option value="1">Semana 1</option><option value="2">Semana 2</option></select>
     </div>
     <div class="mf"><label>Día de visita</label>
-      <select id="m-dia"><option value="Lunes">Lunes</option><option value="Martes">Martes</option><option value="Miercoles">Miércoles</option><option value="Jueves">Jueves</option><option value="Viernes">Viernes</option></select>
+      <select id="m-dia"><option value="">Sin asignar</option><option value="Lunes">Lunes</option><option value="Martes">Martes</option><option value="Miercoles">Miércoles</option><option value="Jueves">Jueves</option><option value="Viernes">Viernes</option></select>
     </div>
     <div class="mf" id="m-motivo-wrap" style="display:none"><label>Motivo del cambio</label>
       <textarea id="m-motivo" placeholder="Explica por qué propones este cambio..."></textarea>
@@ -884,10 +885,12 @@ function celdaResumen(a,total){
 }
 function tablaResumen(titulo,filtroSemana){
   var dias=['Lunes','Martes','Miercoles','Jueves','Viernes'];
+  var tieneSinDia=clientes.some(function(c){return (filtroSemana===0||c.semana===filtroSemana)&&!c.dia;});
+  if(tieneSinDia)dias.push('Sin día');
   var cams=['C1','C2','C3','C4'].filter(function(cam){return clientes.some(function(c){return c.camion===cam&&(filtroSemana===0||c.semana===filtroSemana);});});
   var grid={},totDia={};dias.forEach(function(d){totDia[d]=vacioAgg();});var total=vacioAgg();
   cams.forEach(function(cam){grid[cam]={};dias.forEach(function(d){grid[cam][d]=vacioAgg();});});
-  clientes.forEach(function(c){if(filtroSemana!==0&&c.semana!==filtroSemana)return;if(!grid[c.camion]||dias.indexOf(c.dia)<0)return;agregarAgg(grid[c.camion][c.dia],c);agregarAgg(totDia[c.dia],c);agregarAgg(total,c);});
+  clientes.forEach(function(c){if(filtroSemana!==0&&c.semana!==filtroSemana)return;var diaAgg=c.dia||'Sin día';if(!grid[c.camion]||dias.indexOf(diaAgg)<0)return;agregarAgg(grid[c.camion][diaAgg],c);agregarAgg(totDia[diaAgg],c);agregarAgg(total,c);});
   var h='<div class="res-section"><div class="res-section-title">'+titulo+'</div><div class="res-scroll"><table class="res-table"><thead><tr><th>Camión</th>'+dias.map(function(d){return '<th>'+d+'</th>';}).join('')+'<th>Total</th></tr></thead><tbody>';
   cams.forEach(function(cam){var rt=vacioAgg();dias.forEach(function(d){rt.n+=grid[cam][d].n;rt.visita+=grid[cam][d].visita;rt.mensual+=grid[cam][d].mensual;});h+='<tr><td style="color:'+COLORES[cam]+'">'+cam+'</td>'+dias.map(function(d){return celdaResumen(grid[cam][d],false);}).join('')+celdaResumen(rt,true)+'</tr>';});
   h+='<tr class="total-row"><td>Total</td>'+dias.map(function(d){return celdaResumen(totDia[d],true);}).join('')+celdaResumen(total,true)+'</tr></tbody></table></div></div>';return h;
