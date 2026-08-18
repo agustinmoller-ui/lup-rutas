@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Rutas LUP — BORRADOR v69.2</title>
+<title>Rutas LUP — BORRADOR v69.3</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -554,6 +554,7 @@ function cargarDatos(){
       });
       poblarVendedores();
       document.getElementById('sv_total').textContent=clientes.length;
+      document.getElementById('btn-resumen').textContent='📊 Resumen total ('+clientes.length+')';
       badge.className='ok';badge.textContent='✓ '+clientes.length;
       setTimeout(function(){badge.className='';badge.textContent='⟳ Actualizar';},4000);
       renderizar();renderResumenGlobal();actualizarPanelSel();
@@ -884,13 +885,15 @@ function celdaResumen(a,total){
   return '<td class="'+(total?'total-cell':'')+'"><span class="res-n">'+a.n+' desp.</span><span class="res-m">'+fmtMonto(a.visita)+' potencial</span><span class="res-e">'+fmtMonto(esperada)+' esperado 14d</span><span class="res-mm">'+fmtMonto(a.mensual)+' mes</span></td>';
 }
 function tablaResumen(titulo,filtroSemana){
-  var dias=['Lunes','Martes','Miercoles','Jueves','Viernes'];
-  var tieneSinDia=clientes.some(function(c){return (filtroSemana===0||c.semana===filtroSemana)&&!c.dia;});
-  if(tieneSinDia)dias.push('Sin día');
-  var cams=['C1','C2','C3','C4'].filter(function(cam){return clientes.some(function(c){return c.camion===cam&&(filtroSemana===0||c.semana===filtroSemana);});});
+  var baseDias=['Lunes','Martes','Miercoles','Jueves','Viernes'];
+  var lista=clientes.filter(function(c){return filtroSemana===0||c.semana===filtroSemana;});
+  if(!lista.length)return '<div class="res-section"><div class="res-section-title">'+titulo+'</div><div style="color:#667;font-size:9px;padding:5px 2px">Sin clientes asignados</div></div>';
+  var dias=baseDias.filter(function(d){return lista.some(function(c){return c.dia===d;});});
+  if(lista.some(function(c){return !c.dia;}))dias.unshift('Sin día');
+  var cams=['C1','C2','C3','C4'].filter(function(cam){return lista.some(function(c){return c.camion===cam;});});
   var grid={},totDia={};dias.forEach(function(d){totDia[d]=vacioAgg();});var total=vacioAgg();
   cams.forEach(function(cam){grid[cam]={};dias.forEach(function(d){grid[cam][d]=vacioAgg();});});
-  clientes.forEach(function(c){if(filtroSemana!==0&&c.semana!==filtroSemana)return;var diaAgg=c.dia||'Sin día';if(!grid[c.camion]||dias.indexOf(diaAgg)<0)return;agregarAgg(grid[c.camion][diaAgg],c);agregarAgg(totDia[diaAgg],c);agregarAgg(total,c);});
+  lista.forEach(function(c){var diaAgg=c.dia||'Sin día';if(!grid[c.camion]||dias.indexOf(diaAgg)<0)return;agregarAgg(grid[c.camion][diaAgg],c);agregarAgg(totDia[diaAgg],c);agregarAgg(total,c);});
   var h='<div class="res-section"><div class="res-section-title">'+titulo+'</div><div class="res-scroll"><table class="res-table"><thead><tr><th>Camión</th>'+dias.map(function(d){return '<th>'+d+'</th>';}).join('')+'<th>Total</th></tr></thead><tbody>';
   cams.forEach(function(cam){var rt=vacioAgg();dias.forEach(function(d){rt.n+=grid[cam][d].n;rt.visita+=grid[cam][d].visita;rt.mensual+=grid[cam][d].mensual;});h+='<tr><td style="color:'+COLORES[cam]+'">'+cam+'</td>'+dias.map(function(d){return celdaResumen(grid[cam][d],false);}).join('')+celdaResumen(rt,true)+'</tr>';});
   h+='<tr class="total-row"><td>Total</td>'+dias.map(function(d){return celdaResumen(totDia[d],true);}).join('')+celdaResumen(total,true)+'</tr></tbody></table></div></div>';return h;
