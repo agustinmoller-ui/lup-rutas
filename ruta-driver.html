@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#16213e">
+<title>LUP Ruta — Conductor v1.0</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--nav:#16213e;--bg:#f4f6fa;--accent:#e94560;--blue:#3498db;--green:#25b46b;--muted:#6b7280;--card:#fff;--border:#e5e7eb}
+*{box-sizing:border-box}html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:#172033}button,input,select{font:inherit}button{cursor:pointer}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+#top{flex:none;background:var(--nav);color:#fff;padding:calc(8px + env(safe-area-inset-top)) 10px 9px;box-shadow:0 2px 10px #0003;z-index:500}
+.head{display:flex;align-items:center;gap:7px}.brand{font-size:15px;font-weight:800;flex:1}.brand span{color:var(--accent)}
+.chip{font-size:10px;padding:4px 8px;border-radius:14px;background:#0f3460;white-space:nowrap}.login{border:0;border-radius:18px;background:var(--accent);color:#fff;font-weight:750;padding:6px 13px}.logout{border:0;border-radius:16px;background:#ffffff18;color:#ddd;padding:5px 9px;font-size:10px;display:none}
+#controls{display:none;margin-top:7px;gap:5px;flex-direction:column}.row{display:flex;gap:5px;align-items:center;overflow-x:auto;scrollbar-width:none}.row::-webkit-scrollbar{display:none}
+.filter-btn{border:0;border-radius:18px;background:#0f3460;color:#9ca3af;padding:6px 10px;font-size:11px;font-weight:700;white-space:nowrap}.filter-btn.on{background:var(--accent);color:#fff}.filter-btn.today{background:#f59e0b;color:#171717}.filter-btn.all{background:#fff;color:#16213e}
+#truck-select{border:1px solid #ffffff33;border-radius:16px;background:#0f3460;color:#fff;padding:5px 8px;font-size:11px}
+#search{min-width:120px;flex:1;border:1px solid #ffffff2d;background:#0f3460;color:#fff;border-radius:17px;padding:6px 10px;font-size:11px;outline:none}#search::placeholder{color:#9ca3af}
+#summary{display:none;background:#fff;border-bottom:1px solid var(--border);padding:7px 10px;gap:8px;align-items:center;z-index:450}.stat{font-size:11px;color:var(--muted)}.stat b{font-size:13px;color:#111827}.summary-spacer{flex:1}
+.action{border:0;border-radius:18px;padding:7px 11px;font-size:11px;font-weight:800}.route-start{background:var(--green);color:#fff}.fit-map{background:#eaf2ff;color:#2463a0}
+#main{display:none;flex:1;min-height:0;position:relative}#map{height:100%;width:100%;z-index:1}
+.pin{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px #0005;font-weight:800;font-size:10px}.pin span{transform:rotate(45deg)}
+#drawer{position:absolute;z-index:400;left:7px;right:7px;bottom:7px;background:#fff;border-radius:18px;box-shadow:0 8px 30px #0004;max-height:43%;display:flex;flex-direction:column;overflow:hidden;transition:max-height .2s}
+#drawer.collapsed{max-height:47px}.drawer-head{height:47px;flex:none;display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);gap:8px}.drawer-head b{font-size:13px;flex:1}.drawer-toggle{border:0;background:#f0f3f8;border-radius:14px;padding:5px 9px;font-size:11px}.route-list{overflow-y:auto;padding:5px 7px 12px}
+.client{display:flex;align-items:center;gap:9px;padding:9px 7px;border-bottom:1px solid #eef0f3;background:#fff}.client:active{background:#f4f8ff}.num{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px}.client-main{min-width:0;flex:1}.client-name{font-size:12px;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.client-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.client-metric{text-align:right;font-size:10px;color:var(--muted);flex:none}.client-metric b{display:block;color:#111827;font-size:11px}
+#loading,#denied,#welcome{position:absolute;inset:0;z-index:700;background:linear-gradient(160deg,#16213e,#0f3460);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;padding:28px}#loading,#denied{display:none}.logo{font-size:44px;margin-bottom:8px}.screen-title{font-size:20px;font-weight:850}.screen-copy{font-size:12px;color:#c4cada;max-width:330px;line-height:1.5;margin:8px 0 18px}.big-login{border:0;border-radius:22px;background:var(--accent);color:#fff;font-weight:800;padding:11px 24px}.spinner{width:34px;height:34px;border:4px solid #ffffff33;border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}@keyframes spin{to{transform:rotate(360deg)}}
+#detail{position:fixed;inset:0;z-index:1000;background:#0008;display:none;align-items:flex-end}.detail-card{width:100%;max-height:88dvh;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;padding:11px 14px calc(16px + env(safe-area-inset-bottom))}.handle{width:42px;height:4px;background:#d6d9df;border-radius:3px;margin:0 auto 10px}.detail-top{display:flex;gap:10px}.detail-title{flex:1;min-width:0}.detail-title h2{font-size:17px;margin:0 0 4px}.detail-title p{font-size:11px;color:var(--muted);margin:0;line-height:1.4}.close{border:0;background:#eef1f5;border-radius:50%;width:31px;height:31px}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:13px 0}.metric{background:#f5f7fa;border-radius:12px;padding:10px}.metric span{font-size:10px;color:var(--muted);display:block}.metric b{font-size:16px;display:block;margin-top:3px}.detail-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.detail-actions button,.detail-actions a{border:0;border-radius:13px;text-decoration:none;text-align:center;padding:11px;font-size:12px;font-weight:800}.maps{background:#4285f4;color:#fff;grid-column:1/-1}.call{background:#e9f8ef;color:#15803d}.next{background:#eef2ff;color:#3730a3}.prev{background:#f3f4f6;color:#374151}.no-phone{opacity:.45;pointer-events:none}
+.empty{padding:30px 14px;text-align:center;color:var(--muted);font-size:12px}.slot-label{font-size:10px;font-weight:850;color:#687386;background:#eef1f6;border-radius:8px;padding:5px 8px;margin:6px 1px 2px}
+@media(min-width:850px){#main{display:none}.head,.row,#summary{max-width:1400px;margin-left:auto;margin-right:auto;width:100%}#drawer{left:auto;right:12px;top:12px;bottom:12px;width:390px;max-height:none}.drawer-toggle{display:none}.detail-card{max-width:520px;margin:auto;border-radius:22px 22px 0 0}#map{padding-right:400px}}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="head">
+    <div class="brand">🚚 LUP <span>Ruta</span></div>
+    <span id="truck-chip" class="chip">Sin ruta</span>
+    <span id="user-chip" class="chip" style="display:none"></span>
+    <button id="login-btn" class="login" onclick="login()">Entrar</button>
+    <button id="logout-btn" class="logout" onclick="logout()">Salir</button>
+  </div>
+  <div id="controls">
+    <div class="row" id="week-row">
+      <button class="filter-btn week" data-week="1" onclick="toggleWeek(1)">S1</button>
+      <button class="filter-btn week" data-week="2" onclick="toggleWeek(2)">S2</button>
+      <button class="filter-btn today" onclick="onlyToday()">◎ Solo hoy</button>
+      <button class="filter-btn all" onclick="selectAll()">Todos</button>
+      <select id="truck-select" onchange="setAdminTruck(this.value)" style="display:none"><option value="ALL">Todos los camiones</option><option>C1</option><option>C2</option><option>C3</option><option>C4</option></select>
+    </div>
+    <div class="row" id="day-row">
+      <button class="filter-btn day" data-day="Lunes" onclick="toggleDay('Lunes')">Lun</button>
+      <button class="filter-btn day" data-day="Martes" onclick="toggleDay('Martes')">Mar</button>
+      <button class="filter-btn day" data-day="Miercoles" onclick="toggleDay('Miercoles')">Mié</button>
+      <button class="filter-btn day" data-day="Jueves" onclick="toggleDay('Jueves')">Jue</button>
+      <button class="filter-btn day" data-day="Viernes" onclick="toggleDay('Viernes')">Vie</button>
+      <input id="search" placeholder="Buscar cliente o comuna" oninput="render()">
+    </div>
+  </div>
+</div>
+<div id="summary">
+  <div class="stat"><b id="count">0</b><br>clientes</div>
+  <div class="stat"><b id="slot-count">0</b><br>jornadas</div>
+  <div class="summary-spacer"></div>
+  <button class="action fit-map" onclick="fitVisible()">⌖ Ver todo</button>
+  <button class="action route-start" onclick="startRoute()">▶ Iniciar</button>
+</div>
+<div id="main">
+  <div id="map"></div>
+  <div id="drawer">
+    <div class="drawer-head" onclick="toggleDrawer()"><b id="drawer-title">Ruta seleccionada</b><button class="drawer-toggle" id="drawer-toggle">Ocultar ▾</button></div>
+    <div id="route-list" class="route-list"></div>
+  </div>
+</div>
+<div id="welcome"><div class="logo">🚚</div><div class="screen-title">LUP Ruta</div><div class="screen-copy">Selecciona tus días, revisa todos los clientes en el mapa y navega hacia cada parada con Google Maps.</div><button class="big-login" onclick="login()">Entrar con Google</button></div>
+<div id="loading"><div class="spinner"></div><div id="loading-text">Cargando ruta…</div></div>
+<div id="denied"><div class="logo">🔒</div><div class="screen-title">Sin acceso</div><div id="denied-copy" class="screen-copy">Tu correo no tiene una ruta asignada.</div><button class="big-login" onclick="logout();login()">Cambiar cuenta</button></div>
+<div id="detail" onclick="if(event.target===this)closeDetail()"><div class="detail-card"><div class="handle"></div><div class="detail-top"><div class="detail-title"><h2 id="d-name"></h2><p id="d-address"></p></div><button class="close" onclick="closeDetail()">✕</button></div><div id="metrics" class="metrics"></div><div class="detail-actions"><a id="d-maps" class="maps" target="_blank">📍 Navegar con Google Maps</a><a id="d-call" class="call">📞 Llamar</a><button class="next prev" onclick="openRelative(-1)">← Anterior</button><button class="next" onclick="openRelative(1)">Siguiente →</button></div></div></div>
+<script>
+const CLIENT_ID='178029436426-trd4kji63pmec5b24jndm0goqn5djmi0.apps.googleusercontent.com';
+const SHEETS_ID='178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
+const ROUTES_RANGE="'Borrador Rutas'!A:O"; const USERS_RANGE='Usuarios!A:E';
+const METRICS_API='https://lupita-f3e3c640.base44.app/functions/getClientes';
+const DEPOT={lat:-33.4956,lng:-70.7193}; const DAYS=['Lunes','Martes','Miercoles','Jueves','Viernes'];
+const COLORS={C1:'#e74c3c',C2:'#3498db',C3:'#25b46b',C4:'#f39c12'};
+let token=null,user=null,role=null,assignedTruck='',adminTruck='ALL',routes=[],map=null,markers=[],selectedWeeks=new Set(),selectedDays=new Set(),currentOrdered=[],currentIndex=0,lastBounds=null;
+let metricsByCode={},metricsByName={};
+function q(id){return document.getElementById(id)}
+function esc(s){return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function normCode(s){return String(s||'').toUpperCase().replace(/[^0-9A-ZK]/g,'')}
+function normName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b\([0-9]+\)\b/g,'').replace(/[^a-z0-9]/g,'')}
+function money(v){return Number.isFinite(v)?'$'+Math.round(v).toLocaleString('es-CL'):'—'}
+function daysText(v){return Number.isFinite(v)?v+' días':'Sin dato'}
+function parseDate(v){if(!v)return null;let s=String(v);if(/^\d{4}-\d{2}-\d{2}/.test(s))return new Date(s.slice(0,10)+'T12:00:00');let m=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1],12):null}
+function dayDiff(d){if(!d)return null;let a=new Date();a.setHours(12,0,0,0);d=new Date(d);d.setHours(12,0,0,0);return Math.max(0,Math.round((a-d)/86400000))}
+function parseAmount(v){let n=parseFloat(String(v||'').replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0}
+function login(){
+  let c=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/spreadsheets.readonly email profile',callback:r=>{if(r.error)return showError('No se pudo iniciar sesión');token=r.access_token;fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+token}}).then(x=>x.json()).then(p=>{user={email:(p.email||'').toLowerCase(),name:p.name||p.email};loadUser()}).catch(()=>showError('No se pudo validar el correo'));}});c.requestAccessToken();
+}
+async function sheet(range){let u='https://sheets.googleapis.com/v4/spreadsheets/'+SHEETS_ID+'/values/'+encodeURIComponent(range);let r=await fetch(u,{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw new Error('Google Sheets '+r.status);return (await r.json()).values||[]}
+async function loadUser(){
+  showLoading('Validando acceso…');
+  try{let rows=await sheet(USERS_RANGE);let found=rows.slice(1).find(r=>(r[0]||'').toLowerCase().trim()===user.email);if(!found)return deny('El correo '+user.email+' no está autorizado.');role=(found[1]||'').toLowerCase().trim();assignedTruck=(found[4]||'').toUpperCase().trim();if(role!=='admin'&&!assignedTruck)return deny('Tu usuario está autorizado, pero todavía no tiene un camión asignado.');await loadData();}
+  catch(e){deny('No fue posible leer la ruta. Verifica que este correo tenga acceso al archivo. ('+e.message+')')}
+}
+async function loadData(){
+  showLoading('Cargando clientes y métricas…');
+  let [rv,mr]=await Promise.all([sheet(ROUTES_RANGE),fetch(METRICS_API).then(r=>{if(!r.ok)throw new Error('Métricas '+r.status);return r.json()})]);
+  let h=rv[0]||[];routes=rv.slice(1).map((row,i)=>{let o={};h.forEach((k,j)=>o[k]=row[j]||'');return {key:(i+2)+'|'+o.Codigo,row:i+2,code:o.Codigo,name:o.Nombre,address:o.Direccion,commune:o.Comuna,vendor:o.Vendedor,truck:o.Camion,week:+o.Semana,day:o.Dia,lat:+o.Lat,lng:+o.Lng}}).filter(c=>c.lat&&c.lng);
+  buildMetrics(mr.seguimiento||[],mr.visitas||[]);
+  if(role!=='admin')routes=routes.filter(c=>c.truck===assignedTruck);
+  finishLogin();onlyToday();
+}
+function buildMetrics(seg,visits){
+  let segCode={};seg.forEach(s=>{segCode[normCode(s.Codigo)]=s});let byCode={},byName={};
+  visits.forEach(v=>{let c=normCode(v.client_code||v.client_id),n=normName(v.client_name);if(c)(byCode[c]||(byCode[c]=[])).push(v);if(n)(byName[n]||(byName[n]=[])).push(v)});
+  metricsByCode={};metricsByName={};
+  function calc(list,s){list=(list||[]).slice().sort((a,b)=>(parseDate(b['Fecha Visita']||b.date)||0)-(parseDate(a['Fecha Visita']||a.date)||0));let sales=list.filter(v=>(v['Visita/Venta']||'')==='Venta'&&parseAmount(v.net_amount)>0);let noSale=0;for(let v of list){if((v['Visita/Venta']||'')==='Venta'&&parseAmount(v.net_amount)>0)break;noSale++}let last=list[0],lastSale=sales[0],avg=sales.length?sales.reduce((a,v)=>a+parseAmount(v.net_amount),0)/sales.length:NaN;return {daysVisit:dayDiff(parseDate(last&&(last['Fecha Visita']||last.date))||parseDate(s&&s['Última Visita'])),daysBuy:dayDiff(parseDate(lastSale&&(lastSale['Fecha Visita']||lastSale.date))||parseDate(s&&s['última compra'])),noSale:noSale,lastAmount:lastSale?parseAmount(lastSale.net_amount):NaN,avgAmount:avg,phone:String((s&&s.Telefono)||'').replace(/\D/g,''),lastSeller:(last&&last.salesman_name)||(s&&s['último vendedor'])||'',lastComment:(last&&last.comments)||(s&&s['Último comentario'])||''}}
+  Object.keys(byCode).forEach(c=>metricsByCode[c]=calc(byCode[c],segCode[c]));Object.keys(byName).forEach(n=>metricsByName[n]=calc(byName[n],null));
+  Object.keys(segCode).forEach(c=>{if(!metricsByCode[c])metricsByCode[c]=calc([],segCode[c])});
+}
+function finishLogin(){
+  q('welcome').style.display='none';q('loading').style.display='none';q('denied').style.display='none';q('controls').style.display='flex';q('summary').style.display='flex';q('main').style.display='block';q('login-btn').style.display='none';q('logout-btn').style.display='inline-block';q('user-chip').style.display='inline-block';q('user-chip').textContent=user.name.split(' ')[0];
+  if(role==='admin'){q('truck-select').style.display='block';q('truck-chip').textContent='Admin · Todos'}else{q('truck-chip').textContent=assignedTruck+' · Solo lectura'}
+  if(!map){map=L.map('map',{zoomControl:false}).setView([DEPOT.lat,DEPOT.lng],11);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);L.control.zoom({position:'topright'}).addTo(map)}setTimeout(()=>map.invalidateSize(),100);
+}
+function showLoading(t){q('welcome').style.display='none';q('denied').style.display='none';q('loading').style.display='flex';q('loading-text').textContent=t}
+function deny(t){q('loading').style.display='none';q('welcome').style.display='none';q('denied').style.display='flex';q('denied-copy').textContent=t}
+function showError(t){deny(t)}
+function logout(){token=null;user=null;role=null;assignedTruck='';routes=[];q('welcome').style.display='flex';q('loading').style.display='none';q('denied').style.display='none';q('controls').style.display='none';q('summary').style.display='none';q('main').style.display='none';q('login-btn').style.display='inline-block';q('logout-btn').style.display='none';q('user-chip').style.display='none'}
+function cycleWeek(d=new Date()){let anchor=new Date(2026,7,24,12),monday=new Date(d);monday.setHours(12,0,0,0);let dow=(monday.getDay()+6)%7;monday.setDate(monday.getDate()-dow);let diff=Math.round((monday-anchor)/604800000);return ((diff%2)+2)%2+1}
+function todayDay(){return ['Domingo','Lunes','Martes','Miercoles','Jueves','Viernes','Sabado'][new Date().getDay()]}
+function onlyToday(){selectedWeeks=new Set([cycleWeek()]);let d=todayDay();selectedDays=new Set(DAYS.includes(d)?[d]:[]);syncButtons();render()}
+function selectAll(){selectedWeeks=new Set([1,2]);selectedDays=new Set(DAYS);syncButtons();render()}
+function toggleWeek(w){selectedWeeks.has(w)?selectedWeeks.delete(w):selectedWeeks.add(w);syncButtons();render()}
+function toggleDay(d){selectedDays.has(d)?selectedDays.delete(d):selectedDays.add(d);syncButtons();render()}
+function setAdminTruck(v){adminTruck=v;q('truck-chip').textContent=v==='ALL'?'Admin · Todos':'Admin · '+v;render()}
+function syncButtons(){document.querySelectorAll('.week').forEach(b=>b.classList.toggle('on',selectedWeeks.has(+b.dataset.week)));document.querySelectorAll('.day').forEach(b=>b.classList.toggle('on',selectedDays.has(b.dataset.day)))}
+function filtered(){let s=q('search').value.toLowerCase().trim();return routes.filter(c=>(role!=='admin'||adminTruck==='ALL'||c.truck===adminTruck)&&selectedWeeks.has(c.week)&&selectedDays.has(c.day)&&(!s||(c.name+' '+c.commune+' '+c.code).toLowerCase().includes(s)))}
+function hav(a,b){let R=6371,p1=a.lat*Math.PI/180,p2=b.lat*Math.PI/180,dp=(b.lat-a.lat)*Math.PI/180,dl=(b.lng-a.lng)*Math.PI/180,x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function orderGroup(list){let rem=list.slice(),cur=DEPOT,out=[];while(rem.length){let bi=0,bd=Infinity;rem.forEach((c,i)=>{let d=hav(cur,c);if(d<bd){bd=d;bi=i}});cur=rem.splice(bi,1)[0];out.push(cur)}return out}
+function ordered(list){let out=[];[1,2].forEach(w=>DAYS.forEach(d=>{let g=list.filter(c=>c.week===w&&c.day===d);if(g.length)out.push(...orderGroup(g).map((c,i)=>Object.assign({},c,{seq:i+1,slot:'S'+w+' · '+d})))}));return out}
+function getMetric(c){return metricsByCode[normCode(c.code)]||metricsByName[normName(c.name)]||{daysVisit:null,daysBuy:null,noSale:0,lastAmount:NaN,avgAmount:NaN,phone:'',lastSeller:'',lastComment:''}}
+function render(){if(!map)return;markers.forEach(m=>map.removeLayer(m));markers=[];let list=filtered();currentOrdered=ordered(list);let bounds=[];let lastSlot='',html='';
+  currentOrdered.forEach((c,i)=>{let col=COLORS[c.truck]||'#64748b',m=getMetric(c);let icon=L.divIcon({className:'',html:'<div class="pin" style="background:'+col+'"><span>'+c.seq+'</span></div>',iconSize:[28,28],iconAnchor:[14,28]});let marker=L.marker([c.lat,c.lng],{icon}).addTo(map).on('click',()=>openClient(i));marker.bindTooltip(esc(c.name),{direction:'top',offset:[0,-25]});markers.push(marker);bounds.push([c.lat,c.lng]);if(c.slot!==lastSlot){html+='<div class="slot-label">'+esc(c.slot)+' · '+list.filter(x=>x.week===c.week&&x.day===c.day).length+' clientes</div>';lastSlot=c.slot}html+='<div class="client" onclick="openClient('+i+')"><div class="num" style="background:'+col+'">'+c.seq+'</div><div class="client-main"><div class="client-name">'+esc(c.name)+'</div><div class="client-sub">'+esc(c.commune)+' · '+esc(c.address)+'</div></div><div class="client-metric"><b>'+daysText(m.daysBuy)+'</b>sin compra</div></div>'});
+  q('route-list').innerHTML=html||'<div class="empty">No hay clientes para los filtros seleccionados.</div>';q('count').textContent=list.length;q('slot-count').textContent=new Set(list.map(c=>c.week+'|'+c.day)).size;q('drawer-title').textContent=list.length+' clientes seleccionados';lastBounds=bounds;if(bounds.length)setTimeout(()=>map.fitBounds(bounds,{padding:[28,28],maxZoom:14}),30)
+}
+function fitVisible(){if(lastBounds&&lastBounds.length)map.fitBounds(lastBounds,{padding:[28,28],maxZoom:14})}
+function toggleDrawer(){let d=q('drawer');d.classList.toggle('collapsed');q('drawer-toggle').textContent=d.classList.contains('collapsed')?'Mostrar ▴':'Ocultar ▾'}
+function openClient(i){if(!currentOrdered.length)return;currentIndex=(i+currentOrdered.length)%currentOrdered.length;let c=currentOrdered[currentIndex],m=getMetric(c);q('d-name').textContent=c.seq+'. '+c.name;q('d-address').textContent=c.slot+' · '+c.commune+'\n'+c.address;q('metrics').innerHTML=metric('Última visita',daysText(m.daysVisit))+metric('Última compra',daysText(m.daysBuy))+metric('Visitas seguidas sin compra',String(m.noSale||0))+metric('Monto última compra',money(m.lastAmount))+metric('Monto promedio',money(m.avgAmount))+metric('Último vendedor',m.lastSeller||'—');q('d-maps').href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(c.lat+','+c.lng)+'&travelmode=driving';let ph=String(m.phone||'').replace(/\D/g,'');let call=q('d-call');call.href=ph?'tel:+'+(ph.startsWith('56')?ph:'56'+ph):'#';call.classList.toggle('no-phone',!ph);call.textContent=ph?'📞 Llamar':'📞 Sin teléfono';q('detail').style.display='flex';map.panTo([c.lat,c.lng])}
+function metric(a,b){return '<div class="metric"><span>'+esc(a)+'</span><b>'+esc(b)+'</b></div>'}
+function closeDetail(){q('detail').style.display='none'}
+function openRelative(delta){openClient(currentIndex+delta)}
+function startRoute(){if(!currentOrdered.length)return alert('No hay clientes seleccionados.');openClient(0)}
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail()});
+</script>
+</body>
+</html>
