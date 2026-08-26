@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Rutas LUP — BORRADOR v70</title>
+<title>Rutas LUP — BORRADOR v70.1</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -476,20 +476,41 @@ function actualizarUIAuth(){
     btnSel.style.display='none';
     document.getElementById('btn-lasso').style.display='none';
   }
+  ensureMap();
   renderizar();
 }
 
 // ——— MAPA ———
-window.addEventListener('load',function(){
-  map=L.map('map',{center:[-33.50,-70.67],zoom:11,preferCanvas:true,tap:false});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}).addTo(map);
-  L.marker([BODEGA.lat,BODEGA.lng],{
-    icon:L.divIcon({html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)">🏭 Bodega LUP</div>',iconAnchor:[55,10],className:''})
-  }).addTo(map);
-  // No cargar datos hasta que el usuario se loguee
-  setTimeout(function(){map.invalidateSize(true);},400);
-  document.getElementById('map').addEventListener('click',cerrarSugerencias);
-});
+// Inicialización idempotente: algunos navegadores restauran la sesión de Google
+// sin volver a disparar correctamente el evento load. En ese caso el panel y los
+// datos aparecen, pero Leaflet no alcanza a crear el mapa.
+var mapInitAttempts=0;
+function ensureMap(){
+  if(map){setTimeout(function(){if(map)map.invalidateSize(true);},80);return true;}
+  if(typeof L==='undefined'){
+    if(mapInitAttempts++<40)setTimeout(ensureMap,250);
+    return false;
+  }
+  var el=document.getElementById('map');
+  if(!el)return false;
+  try{
+    map=L.map(el,{center:[-33.50,-70.67],zoom:11,preferCanvas:true,tap:false});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}).addTo(map);
+    L.marker([BODEGA.lat,BODEGA.lng],{
+      icon:L.divIcon({html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)">🏭 Bodega LUP</div>',iconAnchor:[55,10],className:''})
+    }).addTo(map);
+    if(!el.dataset.mapClickBound){el.addEventListener('click',cerrarSugerencias);el.dataset.mapClickBound='1';}
+    setTimeout(function(){if(map){map.invalidateSize(true);renderizar();}},150);
+    return true;
+  }catch(e){
+    console.error('No se pudo inicializar el mapa',e);
+    if(mapInitAttempts++<10)setTimeout(ensureMap,400);
+    return false;
+  }
+}
+document.addEventListener('DOMContentLoaded',ensureMap);
+window.addEventListener('load',ensureMap);
+window.addEventListener('pageshow',ensureMap);
 
 // ——— CARGA RUTAS + MÉTRICAS VIVAS ———
 function normalizarRut(v){return String(v||'').toUpperCase().replace(/[^0-9K]/g,'');}
@@ -578,9 +599,10 @@ function calcKms(lista){if(!lista.length)return 0;var rem=lista.slice(),cur=BODE
 function fmtMonto(v){if(v>=1000000)return '$'+(v/1000000).toFixed(1)+'M';if(v>=1000)return '$'+Math.round(v/1000)+'K';return '$'+Math.round(v);}
 
 function renderizar(){
+  if(!map){ensureMap();return;}
   for(var i=0;i<markers.length;i++)map.removeLayer(markers[i]);
   markers=[];
-  if(!userRol||!map)return;
+  if(!userRol)return;
   var busq=(document.getElementById('buscador').value||'').toLowerCase().trim();
   var visibles=[];
   clientes.forEach(function(c){
