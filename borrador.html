@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Rutas LUP — BORRADOR v70.1</title>
+<title>Rutas LUP — BORRADOR v70.2</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -495,7 +495,7 @@ function ensureMap(){
   if(!el)return false;
   try{
     map=L.map(el,{center:[-33.50,-70.67],zoom:11,preferCanvas:true,tap:false});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:19}).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19,crossOrigin:true}).addTo(map);
     L.marker([BODEGA.lat,BODEGA.lng],{
       icon:L.divIcon({html:'<div style="background:#e94560;color:#fff;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)">🏭 Bodega LUP</div>',iconAnchor:[55,10],className:''})
     }).addTo(map);
