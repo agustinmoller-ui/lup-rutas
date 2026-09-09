@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content">
-<title>LUP — Clientes v66</title><!-- build:20260815_151000 -->
+<title>LUP — Clientes v67</title><!-- build:20260908_123500 -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -455,6 +455,51 @@
       cursor: pointer;
     }
     .dd-all { border-bottom: 1px solid var(--border); margin-bottom: 4px; font-weight: 600; }
+
+  /* SEGUIMIENTO RICHARD */
+  #view-richard { overflow: hidden; }
+  .richard-inner { flex: 1; overflow-y: auto; padding: 16px; }
+  .richard-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:14px; }
+  .richard-title { font-size:20px; font-weight:700; letter-spacing:-0.4px; }
+  .richard-subtitle { color:var(--text2); font-size:12px; margin-top:4px; }
+  .richard-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:10px; margin-bottom:12px; }
+  .richard-kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px 14px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+  .richard-kpi-label { color:var(--text2); font-size:11px; margin-bottom:6px; }
+  .richard-kpi-value { font-size:21px; font-weight:700; letter-spacing:-.4px; }
+  .richard-kpi-note { color:var(--text2); font-size:10px; margin-top:4px; }
+  .richard-positive { color:var(--green); }
+  .richard-negative { color:var(--red); }
+  .richard-neutral { color:var(--accent); }
+  .richard-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr); gap:12px; margin-bottom:12px; }
+  .richard-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; overflow:hidden; }
+  .richard-card-title { font-size:13px; font-weight:650; margin-bottom:10px; }
+  .richard-table-wrap { overflow:auto; max-height:62vh; border:1px solid var(--border); border-radius:10px; }
+  .richard-table { min-width:1680px; font-size:11px; }
+  .richard-table th { position:sticky; top:0; z-index:2; background:var(--surface2); padding:8px 9px; }
+  .richard-table td { padding:7px 9px; }
+  .richard-table .money { text-align:right; font-variant-numeric:tabular-nums; }
+  .richard-table .client-col { position:sticky; left:0; z-index:1; background:var(--surface); min-width:240px; max-width:240px; }
+  .richard-table th.client-col { z-index:3; background:var(--surface2); }
+  .richard-table tr:hover .client-col { background:var(--surface2); }
+  .richard-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .richard-controls input, .richard-controls select { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:7px 9px; color:var(--text); font-family:inherit; font-size:12px; }
+  .richard-toggle { background:var(--accent); color:white; border:0; border-radius:9px; padding:8px 12px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+  .richard-week-table { min-width:560px; }
+  .richard-week-table th, .richard-week-table td { padding:8px 10px; font-size:12px; }
+  .richard-week-table td:not(:first-child), .richard-week-table th:not(:first-child) { text-align:right; }
+  .richard-loading { padding:60px 20px; text-align:center; color:var(--text2); }
+  @media (max-width: 820px) {
+    #tab-richard { font-size:0; }
+    #tab-richard::after { content:'📈 Richard'; font-size:12px; }
+    .richard-inner { padding:8px; }
+    .richard-head { align-items:center; }
+    .richard-title { font-size:17px; }
+    .richard-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+    .richard-kpi { padding:10px; }
+    .richard-kpi-value { font-size:17px; }
+    .richard-grid { grid-template-columns:1fr; }
+  }
+
 </style>
 
 <script>
@@ -464,7 +509,7 @@
     // Usar la altura actual como base fija y NO actualizarla más
     var vh = window.innerHeight;
     document.documentElement.style.setProperty('--real-vh', vh + 'px');
-    document.body.style.height = vh + 'px';
+    if (document.body) document.body.style.height = vh + 'px';
   }
   setVH();
   // Solo actualizar en orientación change, NO en resize (resize = URL bar)
@@ -495,6 +540,7 @@
     <button class="tab-btn active" onclick="showView('map',event)">🗺️ Mapa</button>
     <button class="tab-btn" onclick="showView('list',event)">🔔 Lista</button>
     <button class="tab-btn" onclick="showView('dashboard',event)" id="tab-dashboard">📊 Ventas</button>
+    <button class="tab-btn" onclick="showView('richard',event)" id="tab-richard">📈 Seguimiento Richard</button>
   </div>
   <div class="nav-right" style="display:flex;align-items:center;gap:6px">
     <span id="last-update" style="font-size:10px;color:var(--text2);display:none"></span>
@@ -792,7 +838,14 @@
     </div>
   </div>
 
-  
+
+  <!-- ===== SEGUIMIENTO RICHARD ===== -->
+  <div class="view" id="view-richard">
+    <div class="richard-inner">
+      <div id="richard-content" class="richard-loading">Cargando seguimiento de Richard…</div>
+    </div>
+  </div>
+
 <!-- HISTORIAL MODAL -->
 <div class="modal-overlay" id="modal" style="display:none;visibility:hidden;pointer-events:none" onclick="closeModal(event)">
   <div class="modal" onclick="event.stopPropagation()">
@@ -830,6 +883,7 @@
 
 const SHEET_ID = '178DiTJXpYjoUMsuIiuBBvnG1ljt-ONRw_CtQZUc5jLI';
 const META_DIARIA = 2000000; // meta por día hábil
+const RICHARD_API_URL = 'https://lupita-f3e3c640.base44.app/functions/getSeguimientoRichard';
 let mostrarTodos = false; // switch: seguimiento vs todos
 
 // ============================================================
@@ -845,6 +899,7 @@ let map = null;
 let markers = [];
 let currentSort = { col: 'diasFaltantes', asc: false }; // siempre crítico primero
 let chartVentas = null, chartClientes = null, chartHist = null;
+let richardData = null, richardChart = null, richardDetailOpen = false;
 let ROLE = 'admin'; // 'admin' | 'vendedor'
 
 // ============================================================
@@ -1106,6 +1161,7 @@ async function refreshData() {
   if (btn) { btn.textContent = '⟳'; btn.style.opacity = '0.5'; btn.disabled = true; }
   document.getElementById('loading').style.display = 'flex';
   await loadData(true);
+  if (document.getElementById('view-richard')?.classList.contains('active')) await loadRichardData(true);
   if (btn) { btn.textContent = '⟳'; btn.style.opacity = '1'; btn.disabled = false; }
 }
 
@@ -2225,6 +2281,200 @@ function renderDashboard() {
   }
 }
 
+
+// ============================================================
+// SEGUIMIENTO RICHARD
+// ============================================================
+function richardCLP(value) {
+  const n = Number(value) || 0;
+  return '$' + Math.round(n).toLocaleString('es-CL');
+}
+
+function richardPct(value) {
+  const n = Number(value) || 0;
+  return (n > 0 ? '+' : '') + n.toLocaleString('es-CL', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%';
+}
+
+function richardSignedCLP(value) {
+  const n = Math.round(Number(value) || 0);
+  return (n > 0 ? '+' : n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('es-CL');
+}
+
+function richardTone(value) {
+  return Number(value) >= 0 ? 'richard-positive' : 'richard-negative';
+}
+
+function escapeRichard(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+}
+
+function businessDaysInclusive(start, end) {
+  if (!(start instanceof Date) || !(end instanceof Date) || end < start) return 0;
+  let total = 0;
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (d <= last) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) total++;
+    d.setDate(d.getDate() + 1);
+  }
+  return total;
+}
+
+async function loadRichardData(force = false) {
+  const content = document.getElementById('richard-content');
+  if (!content) return;
+  if (!richardData) content.innerHTML = '<div class="richard-loading">Cargando seguimiento de Richard…</div>';
+  try {
+    const url = force ? RICHARD_API_URL + '?force=true&t=' + Date.now() : RICHARD_API_URL;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || 'No fue posible cargar los datos');
+    richardData = data;
+    renderRichard();
+  } catch (error) {
+    content.innerHTML = `<div class="richard-loading"><div style="font-size:34px;margin-bottom:10px">⚠️</div><div>No se pudo cargar el seguimiento</div><button class="richard-toggle" style="margin-top:12px" onclick="loadRichardData(true)">Reintentar</button></div>`;
+  }
+}
+
+function renderRichard() {
+  if (!richardData) return;
+  const d = richardData;
+  const periodStart = new Date(2026, 7, 24);
+  const periodEnd = new Date(2026, 8, 30);
+  const todayRaw = new Date();
+  const today = todayRaw < periodStart ? new Date(periodStart) : todayRaw > periodEnd ? new Date(periodEnd) : todayRaw;
+  const totalBusinessDays = businessDaysInclusive(periodStart, periodEnd);
+  const elapsedBusinessDays = todayRaw < periodStart ? 0 : businessDaysInclusive(periodStart, today);
+  const rawDiff = d.total2026 - d.total2025;
+  const rawPct = d.total2025 ? rawDiff / d.total2025 * 100 : 0;
+  const projected2026 = elapsedBusinessDays ? d.total2026 / elapsedBusinessDays * totalBusinessDays : 0;
+  const adjustedDiff = projected2026 - d.total2025;
+  const adjustedPct = d.total2025 ? adjustedDiff / d.total2025 * 100 : 0;
+  const pace2026 = elapsedBusinessDays ? d.total2026 / elapsedBusinessDays : 0;
+  const pace2025 = totalBusinessDays ? d.total2025 / totalBusinessDays : 0;
+
+  const content = document.getElementById('richard-content');
+  content.className = '';
+  content.innerHTML = `
+    <div class="richard-head">
+      <div>
+        <div class="richard-title">Seguimiento Richard</div>
+        <div class="richard-subtitle">24 de agosto al 30 de septiembre · 2025 fijo · 2026 automático cada 5 minutos</div>
+      </div>
+      <button class="richard-toggle" onclick="loadRichardData(true)">⟳ Actualizar</button>
+    </div>
+    <div class="richard-kpis">
+      <div class="richard-kpi"><div class="richard-kpi-label">Ventas 2025 · período completo</div><div class="richard-kpi-value">${richardCLP(d.total2025)}</div><div class="richard-kpi-note">Valor histórico fijo</div></div>
+      <div class="richard-kpi"><div class="richard-kpi-label">Ventas 2026 · acumulado</div><div class="richard-kpi-value richard-neutral">${richardCLP(d.total2026)}</div><div class="richard-kpi-note">${elapsedBusinessDays} de ${totalBusinessDays} días hábiles</div></div>
+      <div class="richard-kpi"><div class="richard-kpi-label">Diferencia sin ajustar</div><div class="richard-kpi-value ${richardTone(rawDiff)}">${richardSignedCLP(rawDiff)}</div><div class="richard-kpi-note ${richardTone(rawPct)}">${richardPct(rawPct)} versus 2025 completo</div></div>
+      <div class="richard-kpi"><div class="richard-kpi-label">Proyección 2026 ajustada</div><div class="richard-kpi-value">${richardCLP(projected2026)}</div><div class="richard-kpi-note">Ritmo actual × ${totalBusinessDays} días hábiles</div></div>
+      <div class="richard-kpi"><div class="richard-kpi-label">Brecha ajustada por días hábiles</div><div class="richard-kpi-value ${richardTone(adjustedDiff)}">${richardSignedCLP(adjustedDiff)}</div><div class="richard-kpi-note ${richardTone(adjustedPct)}">${richardPct(adjustedPct)} versus 2025</div></div>
+      <div class="richard-kpi"><div class="richard-kpi-label">Venta neta por día hábil</div><div class="richard-kpi-value">${richardCLP(pace2026)}</div><div class="richard-kpi-note">2025: ${richardCLP(pace2025)} por día</div></div>
+    </div>
+    <div class="richard-grid">
+      <div class="richard-card">
+        <div class="richard-card-title">Avance acumulado 2025 vs 2026</div>
+        <div style="height:250px"><canvas id="richard-chart"></canvas></div>
+      </div>
+      <div class="richard-card">
+        <div class="richard-card-title">Comparación semanal</div>
+        <div style="overflow:auto">
+          <table class="richard-week-table">
+            <thead><tr><th>Semana</th><th>2025</th><th>2026</th><th>Diferencia</th><th>%</th></tr></thead>
+            <tbody>${d.periodLabels.map((label, i) => {
+              const y25 = Number(d.weekly2025[i]) || 0;
+              const has26 = d.weekly2026[i] !== null && d.weekly2026[i] !== undefined;
+              const y26 = has26 ? Number(d.weekly2026[i]) || 0 : null;
+              const diff = has26 ? y26 - y25 : null;
+              const pct = has26 && y25 ? diff / y25 * 100 : null;
+              return `<tr><td>${escapeRichard(label)}</td><td>${richardCLP(y25)}</td><td>${has26 ? richardCLP(y26) : '—'}</td><td class="${diff === null ? '' : richardTone(diff)}">${diff === null ? '—' : richardSignedCLP(diff)}</td><td class="${pct === null ? '' : richardTone(pct)}">${pct === null ? '—' : richardPct(pct)}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="richard-card">
+      <div class="richard-controls">
+        <button class="richard-toggle" id="richard-detail-toggle" onclick="toggleRichardDetail()">${richardDetailOpen ? 'Ocultar detalle' : 'Mostrar detalle'} de ${d.counts.clients.toLocaleString('es-CL')} clientes</button>
+        <input id="richard-search" type="search" placeholder="Buscar cliente o comuna" oninput="renderRichardDetail()" style="display:${richardDetailOpen ? '' : 'none'};min-width:220px">
+        <select id="richard-seller" onchange="renderRichardDetail()" style="display:${richardDetailOpen ? '' : 'none'}">
+          <option value="">Todos los vendedores</option>
+          ${[...new Set(d.clients.map(c => c.vendedor).filter(Boolean))].sort().map(v => `<option>${escapeRichard(v)}</option>`).join('')}
+        </select>
+        <span id="richard-detail-count" style="font-size:11px;color:var(--text2)"></span>
+      </div>
+      <div id="richard-detail" style="display:${richardDetailOpen ? '' : 'none'}"></div>
+    </div>`;
+
+  renderRichardChart();
+  if (richardDetailOpen) renderRichardDetail();
+}
+
+function renderRichardChart() {
+  if (!richardData || !document.getElementById('richard-chart')) return;
+  if (richardChart) richardChart.destroy();
+  const cumulative = values => {
+    let sum = 0;
+    return values.map(v => {
+      if (v === null || v === undefined) return null;
+      sum += Number(v) || 0;
+      return sum;
+    });
+  };
+  richardChart = new Chart(document.getElementById('richard-chart'), {
+    type: 'line',
+    data: {
+      labels: richardData.periodLabels,
+      datasets: [
+        { label:'2025', data:cumulative(richardData.weekly2025), borderColor:'#94a3b8', backgroundColor:'rgba(148,163,184,.12)', tension:.25, borderWidth:2, pointRadius:3 },
+        { label:'2026', data:cumulative(richardData.weekly2026), borderColor:'#4f6ef7', backgroundColor:'rgba(79,110,247,.12)', tension:.25, borderWidth:3, pointRadius:4, spanGaps:false },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom'}, tooltip:{callbacks:{label:ctx => ctx.dataset.label + ': ' + richardCLP(ctx.raw)}}},
+      scales:{ y:{beginAtZero:true,ticks:{callback:v => '$'+Math.round(v/1000000)+'M'}}, x:{grid:{display:false}} }
+    }
+  });
+}
+
+function toggleRichardDetail() {
+  richardDetailOpen = !richardDetailOpen;
+  const detail = document.getElementById('richard-detail');
+  const search = document.getElementById('richard-search');
+  const seller = document.getElementById('richard-seller');
+  const button = document.getElementById('richard-detail-toggle');
+  if (detail) detail.style.display = richardDetailOpen ? '' : 'none';
+  if (search) search.style.display = richardDetailOpen ? '' : 'none';
+  if (seller) seller.style.display = richardDetailOpen ? '' : 'none';
+  if (button) button.textContent = (richardDetailOpen ? 'Ocultar detalle' : 'Mostrar detalle') + ' de ' + richardData.counts.clients.toLocaleString('es-CL') + ' clientes';
+  if (richardDetailOpen) renderRichardDetail();
+}
+
+function renderRichardDetail() {
+  if (!richardData || !richardDetailOpen) return;
+  const search = String(document.getElementById('richard-search')?.value || '').toLowerCase().trim();
+  const seller = String(document.getElementById('richard-seller')?.value || '');
+  const clients = richardData.clients.filter(c => {
+    const haystack = [c.codigo,c.cliente,c.comuna,c.direccion].join(' ').toLowerCase();
+    return (!search || haystack.includes(search)) && (!seller || c.vendedor === seller);
+  });
+  const count = document.getElementById('richard-detail-count');
+  if (count) count.textContent = clients.length.toLocaleString('es-CL') + ' visibles';
+  const detail = document.getElementById('richard-detail');
+  detail.innerHTML = `<div class="richard-table-wrap"><table class="richard-table"><thead><tr>
+    <th class="client-col">Cliente</th><th>Comuna</th><th>Vendedor</th><th>Camión</th>
+    ${richardData.periodLabels.map(l => `<th class="money">2025<br>${escapeRichard(l)}</th>`).join('')}<th class="money">Total 2025</th>
+    ${richardData.periodLabels.map(l => `<th class="money">2026<br>${escapeRichard(l)}</th>`).join('')}<th class="money">Total 2026</th><th class="money">Diferencia</th><th class="money">%</th>
+  </tr></thead><tbody>${clients.map(c => {
+    const diff = c.total2026 - c.total2025;
+    const pct = c.total2025 ? diff / c.total2025 * 100 : (c.total2026 > 0 ? 100 : 0);
+    return `<tr><td class="client-col"><div style="font-weight:600;white-space:normal">${escapeRichard(c.cliente)}</div><div style="color:var(--text2);font-size:9px">${escapeRichard(c.codigo)} · ${escapeRichard(c.direccion)}</div></td><td>${escapeRichard(c.comuna)}</td><td>${escapeRichard(c.vendedor)}</td><td>${escapeRichard(c.camion)}</td>${c.ventas2025.map(v => `<td class="money">${richardCLP(v)}</td>`).join('')}<td class="money"><b>${richardCLP(c.total2025)}</b></td>${c.ventas2026.map(v => `<td class="money">${v === null ? '—' : richardCLP(v)}</td>`).join('')}<td class="money"><b>${richardCLP(c.total2026)}</b></td><td class="money ${richardTone(diff)}">${richardSignedCLP(diff)}</td><td class="money ${richardTone(pct)}">${richardPct(pct)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
 // ============================================================
 // ADMIN
 // ============================================================
@@ -2250,9 +2500,9 @@ function showView(name, evt) {
     // dashboard ahora usa clase tab-btn activo igual que map/list
   }
   
-  // Los filtros compartidos siempre visibles (también para Ventas)
+  // Los filtros compartidos no aplican al seguimiento comparativo de Richard.
   const sfw = document.getElementById('shared-filter-wrapper');
-  if (sfw) sfw.style.display = '';
+  if (sfw) sfw.style.display = name === 'richard' ? 'none' : '';
 
   if (name === 'map') {
     setTimeout(() => { if (map) map.invalidateSize(); }, 100);
@@ -2263,6 +2513,10 @@ function showView(name, evt) {
   }
   if (name === 'dashboard') {
     renderDashboard();
+  }
+  if (name === 'richard') {
+    if (richardData) renderRichard();
+    else loadRichardData();
   }
 }
 
@@ -2277,6 +2531,7 @@ setInterval(async () => {
   // Solo refresca si la pestaña está visible
   if (document.visibilityState === 'hidden') return;
   await loadData(true);
+  if (document.getElementById('view-richard')?.classList.contains('active')) await loadRichardData(true);
   // Mostrar brevemente el timestamp actualizado sin interrumpir al usuario
 }, AUTO_REFRESH_INTERVAL);
 
