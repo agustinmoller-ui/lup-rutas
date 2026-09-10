@@ -2308,6 +2308,8 @@ function escapeRichard(value) {
   return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
 }
 
+const RICHARD_HOLIDAYS = new Set(['2026-09-18']);
+
 function businessDaysInclusive(start, end) {
   if (!(start instanceof Date) || !(end instanceof Date) || end < start) return 0;
   let total = 0;
@@ -2315,7 +2317,8 @@ function businessDaysInclusive(start, end) {
   const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
   while (d <= last) {
     const day = d.getDay();
-    if (day !== 0 && day !== 6) total++;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (day !== 0 && day !== 6 && !RICHARD_HOLIDAYS.has(key)) total++;
     d.setDate(d.getDate() + 1);
   }
   return total;
@@ -2375,7 +2378,7 @@ function renderRichard() {
     </div>
     <div class="richard-grid">
       <div class="richard-card">
-        <div class="richard-card-title">Avance acumulado 2025 vs 2026</div>
+        <div class="richard-card-title">Avance comparable 2025 vs 2026</div>
         <div style="height:250px"><canvas id="richard-chart"></canvas></div>
       </div>
       <div class="richard-card">
@@ -2415,21 +2418,59 @@ function renderRichard() {
 function renderRichardChart() {
   if (!richardData || !document.getElementById('richard-chart')) return;
   if (richardChart) richardChart.destroy();
-  const cumulative = values => {
+
+  const periodStart = new Date(2026, 7, 24);
+  const periodEnd = new Date(2026, 8, 30);
+  const now = new Date();
+  const today = now < periodStart ? new Date(periodStart) : now > periodEnd ? new Date(periodEnd) : now;
+  const periods = [
+    [new Date(2026, 7, 24), new Date(2026, 7, 30)],
+    [new Date(2026, 7, 31), new Date(2026, 8, 6)],
+    [new Date(2026, 8, 7), new Date(2026, 8, 13)],
+    [new Date(2026, 8, 14), new Date(2026, 8, 20)],
+    [new Date(2026, 8, 21), new Date(2026, 8, 27)],
+    [new Date(2026, 8, 28), new Date(2026, 8, 30)],
+  ];
+
+  const cumulative2026 = (() => {
     let sum = 0;
-    return values.map(v => {
-      if (v === null || v === undefined) return null;
-      sum += Number(v) || 0;
-      return sum;
+    return richardData.weekly2026.map(value => {
+      if (value === null || value === undefined) return null;
+      sum += Number(value) || 0;
+      return Math.round(sum);
     });
-  };
+  })();
+
+  // Usa el mismo benchmark de las tarjetas: ritmo diario promedio de 2025.
+  // Así la línea gris compara exactamente los mismos días hábiles de avance.
+  const totalBusinessDays = businessDaysInclusive(periodStart, periodEnd);
+  const pace2025 = totalBusinessDays ? Number(richardData.total2025) / totalBusinessDays : 0;
+  const comparable2025 = periods.map(([start, end]) => {
+    if (today < start) return null;
+    const cutoff = today < end ? today : end;
+    return Math.round(pace2025 * businessDaysInclusive(periodStart, cutoff));
+  });
+
+  const elapsedBusinessDays = now < periodStart ? 0 : businessDaysInclusive(periodStart, today);
+  const currentPace = elapsedBusinessDays ? Number(richardData.total2026) / elapsedBusinessDays : 0;
+  let currentIndex = -1;
+  cumulative2026.forEach((value, index) => { if (value !== null) currentIndex = index; });
+
+  // Parte en el último dato real y continúa con el ritmo diario actual.
+  const projection2026 = periods.map(([, end], index) => {
+    if (currentIndex < 0 || index < currentIndex) return null;
+    if (index === currentIndex) return cumulative2026[index];
+    return Math.round(currentPace * businessDaysInclusive(periodStart, end > periodEnd ? periodEnd : end));
+  });
+
   richardChart = new Chart(document.getElementById('richard-chart'), {
     type: 'line',
     data: {
       labels: richardData.periodLabels,
       datasets: [
-        { label:'2025', data:cumulative(richardData.weekly2025), borderColor:'#94a3b8', backgroundColor:'rgba(148,163,184,.12)', tension:.25, borderWidth:2, pointRadius:3 },
-        { label:'2026', data:cumulative(richardData.weekly2026), borderColor:'#4f6ef7', backgroundColor:'rgba(79,110,247,.12)', tension:.25, borderWidth:3, pointRadius:4, spanGaps:false },
+        { label:'2025 · ritmo comparable', data:comparable2025, borderColor:'#94a3b8', backgroundColor:'rgba(148,163,184,.10)', tension:.25, borderWidth:2, pointRadius:3, spanGaps:false },
+        { label:'2026 · real', data:cumulative2026, borderColor:'#4f6ef7', backgroundColor:'rgba(79,110,247,.12)', tension:.25, borderWidth:3, pointRadius:4, spanGaps:false },
+        { label:'2026 · proyección', data:projection2026, borderColor:'#4f6ef7', backgroundColor:'transparent', borderDash:[7,5], tension:.25, borderWidth:2, pointRadius:3, pointStyle:'circle', spanGaps:false },
       ]
     },
     options: {
