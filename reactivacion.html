@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reactivación de Clientes — LUP Rutas</title>
   
-  <!-- Leaflet 1.9.4 & MarkerCluster CDN -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,9 +15,7 @@
   <!-- Google Identity Services (GSI) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   
-  <!-- Leaflet JS & MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <style>
     :root {
@@ -548,6 +543,13 @@
       .modal-content { width:calc(100vw - 20px); max-width:100%; padding:18px; }
       .modal-field-val { overflow-wrap:anywhere; }
     }
+    .nav-tabs-bar { flex-wrap:wrap; gap:4px; }
+    .export-tools { display:flex; gap:8px; align-items:center; margin-left:auto; padding:6px 0; }
+    .export-note { font-size:11px; color:#536676; }
+    .export-btn { cursor:pointer; border:1px solid #143649; background:#fff; color:#143649; border-radius:6px; font-weight:700; padding:7px 12px; }
+    .export-btn:hover { background:#eaf3ed; }
+    .export-btn:disabled { opacity:.5; cursor:wait; }
+    @media(max-width:600px) { .export-tools{width:100%;margin-left:0;justify-content:flex-end;padding:5px 0 8px;} .export-note{margin-right:auto;} }
   </style>
 </head>
 <body>
@@ -671,6 +673,11 @@
     <div class="nav-tabs-bar">
       <button id="tabBtnMap" class="tab-btn active" onclick="switchTab('map')">🗺️ Mapa</button>
       <button id="tabBtnList" class="tab-btn" onclick="switchTab('list')">📋 Lista de Clientes</button>
+      <div class="export-tools">
+        <span class="export-note">Exportar lista filtrada:</span>
+        <button id="exportExcelBtn" class="export-btn" onclick="exportClients('xlsx')">Excel</button>
+        <button id="exportPdfBtn" class="export-btn" onclick="exportClients('pdf')">PDF</button>
+      </div>
     </div>
 
     <!-- Main View Content -->
@@ -794,7 +801,8 @@
     let allClients = [];
     let activeClientModal = null;
     let leafletMap = null;
-    let markerClusterGroup = null;
+    let clientPointsGroup = null;
+    let pointRenderer = null;
     let autoRefreshTimer = null;
     let dataEpoch = 0;
     let oauthExpiresAt = 0;
@@ -802,6 +810,77 @@
 
     window.addEventListener('focus', () => { if(oauthToken) loadSheetData(); });
     document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && oauthToken) loadSheetData(); });
+
+
+    // Descargas locales. Solo incluye los clientes que cumplen los filtros actuales.
+    const exportLibraries = {"exceljs": {"url": "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js", "sri": "sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz"}, "jspdf": {"url": "https://cdn.jsdelivr.net/npm/jspdf@3.0.3/dist/jspdf.umd.min.js", "sri": "sha384-GwHhSt8QjC7J+v0zZ0Flfho/T76YHEcCL9w4rvjTIUHauh6gWJeBSIi3vWXxNhtA"}, "autotable": {"url": "https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.2/dist/jspdf.plugin.autotable.min.js", "sri": "sha384-voAWf+DQNBx+Eya8tGEw2DHSo8aPM0bTyJhi+ZbLLfV6HzrvPV/UqIvc3+ULj7bS"}};
+    const libraryLoads = new Map();
+    let exportBusy = false;
+    function loadExportLibrary(name) {
+      if (libraryLoads.has(name)) return libraryLoads.get(name);
+      const config=exportLibraries[name];
+      const promise=new Promise((resolve,reject)=>{
+        const tag=document.createElement('script');tag.src=config.url;tag.integrity=config.sri;tag.crossOrigin='anonymous';
+        tag.onload=resolve;tag.onerror=()=>{tag.remove();libraryLoads.delete(name);reject(new Error('No se pudo cargar la herramienta de exportación. Reintenta con conexión a internet.'));};
+        document.head.appendChild(tag);
+      });libraryLoads.set(name,promise);return promise;
+    }
+    function exportSnapshot() {
+      const clients=getFilteredClients().map(c=>({...c}));
+      const text=id=>{const el=document.getElementById(id);return el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value;};
+      const filters=`Días sin compra > ${text('minDaysInput')}; ${text('alcanceSelect')}; Comuna: ${text('comunaSelect')}; Vendedor: ${text('vendedorSelect')}; Status: ${text('statusSelect')}; Buscar: ${text('searchInput')||'sin búsqueda'}`;
+      const now=new Date();const date=new Intl.DateTimeFormat('es-CL',{timeZone:'America/Santiago',dateStyle:'short',timeStyle:'short'}).format(now);
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);const d=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+      return {clients,filters,date,file:`LUP_clientes_${d.year}-${d.month}-${d.day}_${clients.length}`};
+    }
+    function downloadBlob(blob,filename) {
+      const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }
+    async function exportClients(format) {
+      if (!oauthToken) return showToast('Ingresa con Google para exportar.','warning');
+      if(exportBusy) return;
+      const snapshot=exportSnapshot();
+      if(!snapshot.clients.length)return showToast('No hay clientes que cumplan los filtros actuales.','warning');
+      exportBusy=true;document.querySelectorAll('.export-btn').forEach(b=>b.disabled=true);
+      try {
+        if(format==='xlsx')await exportExcel(snapshot);else if(format==='pdf')await exportPdf(snapshot);else throw new Error('Formato inválido.');
+        showToast(`Archivo generado: ${snapshot.clients.length} clientes de la lista filtrada.`,'success');
+      }catch(err){showToast(err.message||'No se pudo generar el archivo.','error');}
+      finally{exportBusy=false;document.querySelectorAll('.export-btn').forEach(b=>b.disabled=false);}
+    }
+    async function exportExcel(snapshot) {
+      await loadExportLibrary('exceljs');
+      if(!oauthToken)throw new Error('La sesión se cerró. Ingresa nuevamente antes de exportar.');
+      const wb=new ExcelJS.Workbook();wb.creator='LUP';wb.created=new Date();
+      const ws=wb.addWorksheet('Clientes',{views:[{state:'frozen',ySplit:1}]});
+      const columns=[['Cliente',38],['Dirección',44],['Comuna',22],['Teléfono',20],['Último vendedor',26],['Status',16],['N° de compras',16],['Total comprado neto (CLP)',25],['Promedio compra neto (CLP)',27],['Frecuencia (días)',20],['Última visita',18],['Última compra',18],['Días sin compra',19],['Días último contacto',23],['Latitud',18],['Longitud',18],['Maps',22],['Comentario',45],['ID cliente',24]];
+      ws.columns=columns.map(([header,width])=>({header,width}));
+      for(const c of snapshot.clients){
+        const row=ws.addRow([c.nombre,c.direccion,c.comuna,c.telefono,c.vendedor,c.status,c.numCompras,c.totalNetoVal,parseCurrency(c.promedioNetoStr),c.frecuencia?Number(c.frecuencia.replace(',','.')):null,c.ultimaVisitaDate,c.ultimaCompraDate,c.ultimaCompraDays,c.diasContacto===''?null:Number(c.diasContacto),c.lat,c.lng,(c.hasCoords||c.direccion)?{text:'Ir a Maps',hyperlink:getGoogleMapsLink(c)}:null,c.comentario,c.id]);
+        [8,9].forEach(i=>row.getCell(i).numFmt='"$"#,##0');[15,16].forEach(i=>row.getCell(i).numFmt='0.000000');
+        row.getCell(4).numFmt='@';row.getCell(17).font={color:{argb:'FF1267A5'},underline:true};
+      }
+      ws.autoFilter={from:{row:1,column:1},to:{row:ws.rowCount,column:columns.length}};
+      ws.getRow(1).height=32;ws.getRow(1).eachCell(cell=>{cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF143649'}};cell.font={bold:true,color:{argb:'FFFFFFFF'}};cell.alignment={vertical:'middle',wrapText:true};});
+      const meta=wb.addWorksheet('Filtros y alcance');meta.columns=[{width:26},{width:110}];
+      [['Generado en Chile',snapshot.date],['Clientes exportados',snapshot.clients.length],['Filtros aplicados',snapshot.filters],['Alcance','Incluye toda la lista filtrada, no solo los puntos visibles en el mapa.'],['Base de ventas','Histórico al 22/10/2026. Montos netos sin IVA.'],['Estados','Valores de la última sincronización recibida por la app.'],['Sin coordenadas','También se incluyen los clientes sin ubicación.'],['Datos faltantes','Se dejan vacíos. No se inventan teléfonos ni coordenadas.']].forEach(r=>meta.addRow(r));
+      const buffer=await wb.xlsx.writeBuffer();downloadBlob(new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),snapshot.file+'.xlsx');
+    }
+    async function exportPdf(snapshot) {
+      await loadExportLibrary('jspdf');await loadExportLibrary('autotable');
+      if(!oauthToken)throw new Error('La sesión se cerró. Ingresa nuevamente antes de exportar.');
+      const doc=new jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+      doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('LUP | Lista de clientes',10,13);
+      doc.setFont('helvetica','normal');doc.setFontSize(8);doc.text(`${snapshot.clients.length} clientes | Generado: ${snapshot.date} (Chile) | Montos netos`,10,20);
+      const filters=doc.splitTextToSize(snapshot.filters,275);doc.setFontSize(7);doc.text(filters,10,26);
+      const head=[['Cliente','Dirección / Comuna','Teléfono','Última compra','Días sin compra','Vendedor','Status','Compras','Total neto','Maps']];
+      const body=snapshot.clients.map(c=>[c.nombre,[c.direccion,c.comuna].filter(Boolean).join(', '),c.telefono||'Sin dato',c.ultimaCompraDate||'Sin compras',c.ultimaCompraDays===null?'Sin compras':String(c.ultimaCompraDays),c.vendedor||'',c.status,String(c.numCompras),formatCLP(c.totalNetoVal),(c.hasCoords||c.direccion)?'Ir a Maps':'Sin ubicación']);
+      const heights=26+filters.length*3.2;
+      const opts={head,body,tableWidth:269,startY:heights+3,margin:{top:12,left:10,right:10,bottom:13},showHead:'everyPage',rowPageBreak:'avoid',theme:'grid',styles:{font:'helvetica',fontSize:7,cellPadding:1.5,overflow:'linebreak'},headStyles:{fillColor:[20,54,73],textColor:[255,255,255],fontSize:7},columnStyles:{0:{cellWidth:44},1:{cellWidth:57},2:{cellWidth:25},3:{cellWidth:20},4:{cellWidth:16},5:{cellWidth:28},6:{cellWidth:18},7:{cellWidth:14},8:{cellWidth:29},9:{cellWidth:18}},didDrawCell:data=>{if(data.section==='body'&&data.column.index===9){const c=snapshot.clients[data.row.index];if(c&&(c.hasCoords||c.direccion))doc.link(data.cell.x,data.cell.y,data.cell.width,data.cell.height,{url:getGoogleMapsLink(c)});}}};
+      if(typeof doc.autoTable==='function')doc.autoTable(opts);else if(window.jspdfAutoTable&&typeof window.jspdfAutoTable.autoTable==='function')window.jspdfAutoTable.autoTable(doc,opts);else throw new Error('La herramienta PDF no está disponible.');
+      const pages=doc.getNumberOfPages();for(let n=1;n<=pages;n++){doc.setPage(n);doc.setFontSize(7);doc.text('LUP | Histórico al 22/10/2026. Estados según última sincronización.',10,203);doc.text(`Página ${n} de ${pages}`,286,203,{align:'right'});}
+      downloadBlob(doc.output('blob'),snapshot.file+'.pdf');
+    }
 
     // --- GOOGLE OAUTH 2.0 (GSI) FLOW ---
     window.onload = function() {
@@ -856,7 +935,7 @@
     function logout() {
       dataEpoch++; oauthToken = null; oauthExpiresAt = 0; oauthUserEmail = ''; allClients = []; activeClientModal = null;
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-      if (markerClusterGroup) markerClusterGroup.clearLayers();
+      if (clientPointsGroup) clientPointsGroup.clearLayers();
       savingLocks.clear();
       document.getElementById('listTableBody').innerHTML = '';
       document.getElementById('detailModal').style.display = 'none';
@@ -1199,7 +1278,7 @@
     function initMapIfNeeded() {
       if (leafletMap) return;
       
-      leafletMap = L.map('mapView', { zoomControl: true }).setView([-33.4489, -70.6693], 11);
+      leafletMap = L.map('mapView', { zoomControl: true, preferCanvas: true }).setView([-33.4489, -70.6693], 11);
       
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
@@ -1207,17 +1286,16 @@
         maxZoom: 19
       }).addTo(leafletMap);
 
-      markerClusterGroup = L.markerClusterGroup({
-        maxClusterRadius: 45,
-        disableClusteringAtZoom: 16
-      });
-      leafletMap.addLayer(markerClusterGroup);
+      pointRenderer = L.canvas({ padding: 0.3 });
+      clientPointsGroup = L.layerGroup();
+      leafletMap.on('zoomend', () => clientPointsGroup.eachLayer(point => point.setRadius(leafletMap.getZoom() < 9 ? 3 : 4.5)));
+      leafletMap.addLayer(clientPointsGroup);
     }
 
     function renderMap(filtered) {
-      if (!leafletMap || !markerClusterGroup) return;
+      if (!leafletMap || !clientPointsGroup) return;
 
-      markerClusterGroup.clearLayers();
+      clientPointsGroup.clearLayers();
       const colorScheme = document.getElementById('colorSchemeSelect').value;
 
       const bounds = [];
@@ -1226,23 +1304,12 @@
         if (!client.hasCoords) return;
 
         const color = getMarkerColor(client, colorScheme);
-        const icon = L.divIcon({
-          className: 'custom-marker',
-          html: `<div style="
-            background-color: ${color};
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-          "></div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8]
+        const marker = L.circleMarker([client.lat, client.lng], {
+          renderer: pointRenderer, radius: leafletMap.getZoom() < 9 ? 3 : 4.5,
+          color: '#ffffff', weight: 1, fillColor: color, fillOpacity: 0.95
         });
-
-        const marker = L.marker([client.lat, client.lng], { icon: icon });
         marker.bindPopup(buildPopupHTML(client));
-        markerClusterGroup.addLayer(marker);
+        clientPointsGroup.addLayer(marker);
         bounds.push([client.lat, client.lng]);
       });
 
