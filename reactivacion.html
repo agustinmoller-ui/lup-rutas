@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reactivación de Clientes — LUP Rutas</title>
+  
+  <!-- Leaflet 1.9.4 & MarkerCluster CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Google Identity Services (GSI) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- Leaflet JS & MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <style>
+    :root {
+      --lup-azul: #123047;
+      --lup-verde: #49835b;
+      --lup-crema: #f7f5ee;
+      --lup-crema-dark: #ebe7db;
+      --lup-border: #d4dcd6;
+      --text-main: #123047;
+      --text-muted: #5a6e7f;
+      --bg-body: #f7f5ee;
+      --surface: #ffffff;
+      
+      --status-pendiente: #f39c12;
+      --status-sigue: #49835b;
+      --status-nosigue: #c0392b;
+
+      --interval-30: #123047;
+      --interval-60: #49835b;
+      --interval-90: #f39c12;
+      --interval-180: #e74c3c;
+      --interval-critical: #8b0000;
+      --interval-sincompras: #7f8c8d;
+
+      --shadow-sm: 0 2px 6px rgba(18, 48, 71, 0.06);
+      --shadow-md: 0 4px 14px rgba(18, 48, 71, 0.1);
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* OAuth Overlay Screen */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(18, 48, 71, 0.96);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      background: #ffffff;
+      padding: 40px 32px;
+      border-radius: 16px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .login-logo {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--lup-azul);
+      letter-spacing: -1px;
+      margin-bottom: 6px;
+    }
+    .login-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.4;
+    }
+    .btn-google {
+      background: var(--lup-azul);
+      color: #ffffff;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.2s, transform 0.1s;
+      width: 100%;
+      justify-content: center;
+    }
+    .btn-google:hover {
+      background: #0c2030;
+      transform: translateY(-1px);
+    }
+    .auth-error-msg {
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--status-nosigue);
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    /* Main App Container */
+    #appContainer {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Header */
+    .app-header {
+      background: var(--lup-azul);
+      color: #ffffff;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+    .brand-tag {
+      background: rgba(255,255,255,0.15);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .header-user {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .user-email {
+      font-size: 13px;
+      color: rgba(255,255,255,0.88);
+      font-weight: 500;
+    }
+    .btn-logout {
+      background: rgba(255,255,255,0.12);
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-logout:hover {
+      background: rgba(255,255,255,0.25);
+    }
+
+    /* Real-Time Banner */
+    .live-banner {
+      background: #eef5f0;
+      border-bottom: 1px solid var(--lup-border);
+      color: var(--lup-verde);
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .banner-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--lup-verde);
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      box-shadow: 0 0 0 3px rgba(73, 131, 91, 0.2);
+    }
+
+    /* Filters Bar */
+    .filters-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--lup-border);
+      padding: 12px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filter-input, .filter-select {
+      background: var(--lup-crema);
+      border: 1px solid var(--lup-border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text-main);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .filter-input:focus, .filter-select:focus {
+      border-color: var(--lup-azul);
+    }
+    .filter-search {
+      min-width: 220px;
+      flex: 1;
+    }
+
+    /* Metrics Bar */
+    .metrics-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--lup-border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .metric-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .metric-val {
+      font-weight: 700;
+      color: var(--lup-azul);
+    }
+    .metric-badge {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-pendiente { background: #fef5e7; color: #d68910; }
+    .badge-sigue { background: #eaf5ea; color: #27ae60; }
+    .badge-nosigue { background: #fadbd8; color: #c0392b; }
+    .badge-warning { background: #fdebd0; color: #b9770e; }
+
+    /* Tabs Bar */
+    .nav-tabs-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--lup-border);
+      padding: 0 20px;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--lup-azul);
+      border-bottom-color: var(--lup-azul);
+    }
+
+    /* Content Area */
+    .main-content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .tab-content {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Map View */
+    #mapView {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    .map-legend {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(4px);
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      z-index: 1000;
+      font-size: 12px;
+      max-width: 240px;
+    }
+    .legend-title {
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--lup-azul);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* List View */
+    .list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    .list-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .list-table th {
+      background: var(--lup-crema);
+      color: var(--lup-azul);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--lup-border);
+    }
+    .list-table td {
+      padding: 12px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid #f0f3f5;
+      vertical-align: middle;
+    }
+    .list-table tr:hover {
+      background: #fafbfc;
+    }
+    .client-name {
+      font-weight: 700;
+      color: var(--lup-azul);
+      font-size: 14px;
+    }
+    .client-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .status-select {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid var(--lup-border);
+      outline: none;
+    }
+    .status-select.sel-pendiente { background: #fef5e7; color: #d68910; border-color: #f5cba7; }
+    .status-select.sel-sigue { background: #eaf5ea; color: #27ae60; border-color: #a9dfbf; }
+    .status-select.sel-nosigue { background: #fadbd8; color: #c0392b; border-color: #f5b7b1; }
+
+    /* Action Buttons */
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid var(--lup-border);
+      background: var(--surface);
+      color: var(--lup-azul);
+      transition: all 0.2s;
+    }
+    .btn-action:hover {
+      background: var(--lup-crema);
+    }
+    .btn-maps {
+      background: #eef4fc;
+      color: #1a73e8;
+      border-color: #d2e3fc;
+    }
+    .btn-wa {
+      background: #e8f8f0;
+      color: #075e54;
+      border-color: #c2eabd;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-card {
+      background: var(--surface);
+      border-radius: 16px;
+      max-width: 540px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 16px 32px rgba(0,0,0,0.2);
+      padding: 24px;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: transparent;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .modal-field {
+      background: var(--lup-crema);
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+    }
+    .modal-field-lbl {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .modal-field-val {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--lup-azul);
+      margin-top: 2px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--lup-azul);
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      z-index: 10000;
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .filters-bar { padding: 10px 12px; gap: 8px; }
+      .filter-search { min-width: 100%; }
+      .metrics-bar { padding: 8px 12px; }
+      .modal-grid { grid-template-columns: 1fr; }
+      .list-table th:nth-child(4), .list-table td:nth-child(4) { display: none; }
+    }
+    html, body { max-width:100%; }
+    #appContainer, .main-content, .tab-content { min-width:0; max-width:100%; }
+    .toast { max-width:calc(100vw - 24px); width:max-content; overflow-wrap:anywhere; }
+    @media(max-width:768px) {
+      .app-header { flex-wrap:wrap; gap:8px; padding:10px 12px; }
+      .header-brand { min-width:0; flex-wrap:wrap; gap:6px; }
+      .header-user { width:100%; min-width:0; justify-content:space-between; gap:8px; }
+      .user-email { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+      .live-banner { flex-wrap:wrap; gap:6px; padding:8px 12px; }
+      .live-banner > div, .live-banner > span { min-width:0; max-width:100%; }
+      .filter-group { min-width:0; max-width:100%; }
+      .filter-input,.filter-select { min-width:0; max-width:100%; }
+      .metrics-bar { width:100%; min-width:0; }
+      .nav-tabs-bar { padding:0 8px; }
+      .tab-btn { padding:10px 12px; }
+      .modal-content { width:calc(100vw - 20px); max-width:100%; padding:18px; }
+      .modal-field-val { overflow-wrap:anywhere; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Modal / Screen (OAuth 2.0) -->
+  <div id="loginModal" class="login-overlay">
+    <div class="login-card">
+      <div class="login-logo">LUP</div>
+      <div class="login-subtitle">Reactivación de Clientes 2026<br>Inicia sesión con tu cuenta de Google para acceder a los datos de la hoja.</div>
+      <button id="btnGoogleLogin" class="btn-google" onclick="handleGoogleSignIn()">
+        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#ffffff" d="M21.35 11.1H12v3.8h5.35c-.8 2.2-2.85 3.8-5.35 3.8-3.3 0-6-2.7-6-6s2.7-6 6-6c1.5 0 2.85.55 3.9 1.45l2.85-2.85C16.95 3.1 14.65 2.2 12 2.2 6.6 2.2 2.2 6.6 2.2 12s4.4 9.8 9.8 9.8c5.65 0 9.4-3.95 9.4-9.5 0-.7-.05-1.4-.15-2.2z"/></svg>
+        Iniciar Sesión con Google
+      </button>
+      <div id="authErrorMessage" class="auth-error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Main App View -->
+  <div id="appContainer">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <span class="brand-title">LUP Rutas</span>
+        <span class="brand-tag">Reactivación</span>
+      </div>
+      <div class="header-user">
+        <span id="userEmailDisplay" class="user-email"></span>
+        <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <!-- Live Status Banner -->
+    <div class="live-banner">
+      <div>
+        <span class="banner-dot"></span>
+        <span>Base histórica al 22/10/2026. Estados compartidos en la planilla; nuevas ventas no se sincronizan automáticamente.</span>
+      </div>
+      <div id="lastSyncTime" style="font-size: 11px; opacity: 0.8;">Sync: Justo ahora</div>
+    </div>
+
+    <!-- Filters Bar -->
+    <section class="filters-bar">
+      <div class="filter-group filter-search">
+        <label class="filter-label">Buscar Cliente</label>
+        <input type="text" id="searchInput" class="filter-input" placeholder="Nombre, dirección, teléfono, ID..." oninput="onFilterChange()">
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Comuna</label>
+        <select id="comunaSelect" class="filter-select" onchange="onFilterChange()">
+          <option value="">Todas las comunas</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Vendedor</label>
+        <select id="vendedorSelect" class="filter-select" onchange="onFilterChange()">
+          <option value="">Todos los vendedores</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Status Reactivación</label>
+        <select id="statusSelect" class="filter-select" onchange="onFilterChange()">
+          <option value="">Todos los status</option>
+          <option value="Pendiente">⏳ Pendiente</option>
+          <option value="Sigue">✅ Sigue</option>
+          <option value="No Sigue">❌ No Sigue</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Días Sin Compra (> X)</label>
+        <input type="number" id="minDaysInput" class="filter-input" value="60" min="0" style="width: 110px;" oninput="onFilterChange()">
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Alcance Compras</label>
+        <select id="alcanceSelect" class="filter-select" onchange="onFilterChange()">
+          <option value="compraron_alguna_vez">Compraron alguna vez (Default)</option>
+          <option value="todos">Todos los clientes</option>
+          <option value="sin_compras">Sin compras (0 compras)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Colorear Mapa Por</label>
+        <select id="colorSchemeSelect" class="filter-select" onchange="onFilterChange()">
+          <option value="inactividad">Días de inactividad</option>
+          <option value="status">Status (Pendiente/Sigue/No Sigue)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Metrics Summary Bar -->
+    <section class="metrics-bar">
+      <div class="metric-pill">
+        <span>Clientes:</span>
+        <span id="metricCount" class="metric-val">0 / 0</span>
+      </div>
+      <div class="metric-pill">
+        <span>Total Neto:</span>
+        <span id="metricTotalNeto" class="metric-val">$0</span>
+      </div>
+      <div class="metric-pill">
+        <span>Prom. Días Inactivo:</span>
+        <span id="metricAvgDays" class="metric-val">0 días</span>
+      </div>
+      <div class="metric-pill">
+        <span>Status:</span>
+        <span id="badgePendiente" class="metric-badge badge-pendiente">Pendiente: 0</span>
+        <span id="badgeSigue" class="metric-badge badge-sigue">Sigue: 0</span>
+        <span id="badgeNoSigue" class="metric-badge badge-nosigue">No Sigue: 0</span>
+      </div>
+      <div class="metric-pill">
+        <span id="badgeNoCoords" class="metric-badge badge-warning" style="display:none;">0 sin coords (no en mapa)</span>
+      </div>
+    </section>
+
+    <!-- Tabs Header -->
+    <div class="nav-tabs-bar">
+      <button id="tabBtnMap" class="tab-btn active" onclick="switchTab('map')">🗺️ Mapa</button>
+      <button id="tabBtnList" class="tab-btn" onclick="switchTab('list')">📋 Lista de Clientes</button>
+    </div>
+
+    <!-- Main View Content -->
+    <main class="main-content">
+      <!-- Map View Tab -->
+      <div id="mapTab" class="tab-content active">
+        <div id="mapView"></div>
+        <div class="map-legend">
+          <div id="legendTitle" class="legend-title">Inactividad (Días)</div>
+          <div id="legendItems"></div>
+        </div>
+      </div>
+
+      <!-- List View Tab -->
+      <div id="listTab" class="tab-content">
+        <div class="list-container">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Cliente / Comuna</th>
+                <th>Días sin compra</th>
+                <th>Última visita</th>
+                <th>Total Neto</th>
+                <th>Vendedor</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="listTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Detail Modal -->
+  <div id="detailModal" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <h2 id="modalTitle" class="client-name" style="font-size: 18px; margin-bottom: 4px;"></h2>
+      <div id="modalSub" class="client-sub" style="margin-bottom: 16px;"></div>
+
+      <div class="modal-grid">
+        <div class="modal-field">
+          <div class="modal-field-lbl">ID CLIENTE</div>
+          <div id="modalId" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">TELÉFONO</div>
+          <div id="modalPhone" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">DÍAS SIN COMPRA</div>
+          <div id="modalDaysSinCompra" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">FECHA ÚLTIMA COMPRA</div>
+          <div id="modalFechaCompra" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">DÍAS ÚLTIMA VISITA</div>
+          <div id="modalDaysVisita" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">FECHA ÚLTIMA VISITA</div>
+          <div id="modalFechaVisita" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">TOTAL COMPRADO NETO</div>
+          <div id="modalTotalNeto" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">PROMEDIO COMPRA NETO</div>
+          <div id="modalPromedioNeto" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">N° DE COMPRAS</div>
+          <div id="modalNumCompras" class="modal-field-val"></div>
+        </div>
+        <div class="modal-field">
+          <div class="modal-field-lbl">FRECUENCIA COMPRA</div>
+          <div id="modalFrecuencia" class="modal-field-val"></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="filter-label" style="display:block; margin-bottom: 6px;">Status Reactivación:</label>
+        <select id="modalStatusSelect" class="status-select" style="width: 100%; font-size: 14px; padding: 10px;">
+          <option value="Pendiente">⏳ Pendiente</option>
+          <option value="Sigue">✅ Sigue</option>
+          <option value="No Sigue">❌ No Sigue</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="filter-label" style="display:block; margin-bottom: 6px;">Comentario / Observación:</label>
+        <input type="text" id="modalCommentInput" class="filter-input" style="width: 100%;" placeholder="Agregar nota sobre este cliente...">
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button id="modalSaveBtn" class="btn-google" style="flex:1; padding: 10px;" onclick="saveModalChanges()">Guardar Cambios</button>
+        <a id="modalMapsLink" href="#" target="_blank" rel="noopener noreferrer" class="btn-action btn-maps" style="padding: 10px 16px;">🗺️ Ir a Maps</a>
+        <a id="modalWaLink" href="#" target="_blank" rel="noopener noreferrer" class="btn-action btn-wa" style="padding: 10px 16px; display:none;">💬 WhatsApp</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // --- APP CONSTANTS & MEMORY STATE ---
+    const GOOGLE_CLIENT_ID = '178029436426-trd4kji63pmec5b24jndm0goqn5djmi0.apps.googleusercontent.com';
+    const SPREADSHEET_ID = '1Ibv-d08Dznioe6rc87GVKowO1AQd4WHWcdj85w9ocCg';
+    const SHEET_TAB = 'Clientes';
+
+    let oauthToken = null; // ONLY in memory!
+    let oauthUserEmail = '';
+    let tokenClient = null;
+
+    let allClients = [];
+    let activeClientModal = null;
+    let leafletMap = null;
+    let markerClusterGroup = null;
+    let autoRefreshTimer = null;
+    let dataEpoch = 0;
+    let oauthExpiresAt = 0;
+    let savingLocks = new Map(); // Concurrent save lock per client ID
+
+    // --- GOOGLE OAUTH 2.0 (GSI) FLOW ---
+    window.onload = function() {
+      initGoogleAuth();
+    };
+
+    function initGoogleAuth() {
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        setTimeout(initGoogleAuth, 300);
+        return;
+      }
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/spreadsheets email profile',
+        callback: async (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            oauthToken = tokenResponse.access_token;
+            oauthExpiresAt = Date.now() + Math.max(60, Number(tokenResponse.expires_in || 3600)) * 1000;
+            try { await fetchUserProfile(); } catch (e) { logout(); showAuthError(e.message); return; }
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+            initMapIfNeeded();
+            loadSheetData();
+            startAutoRefresh();
+          } else {
+            showAuthError('No se obtuvo token de acceso.');
+          }
+        },
+        error_callback: (err) => {
+          console.error('OAuth error:', err);
+          showAuthError('Error de autenticación Google: ' + (err.message || 'desconocido'));
+        }
+      });
+    }
+
+    function handleGoogleSignIn() {
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: '' });
+      } else {
+        showAuthError('Cargando librería de Google... intenta nuevamente en un instante.');
+      }
+    }
+
+    function showAuthError(msg) {
+      document.getElementById('authErrorMessage').textContent = msg;
+    }
+
+    function handleTokenExpired() {
+      logout(); showAuthError('Tu sesión expiró. Ingresa nuevamente con Google para continuar.');
+    }
+
+    function logout() {
+      dataEpoch++; oauthToken = null; oauthExpiresAt = 0; oauthUserEmail = ''; allClients = []; activeClientModal = null;
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      if (markerClusterGroup) markerClusterGroup.clearLayers();
+      savingLocks.clear();
+      document.getElementById('listTableBody').innerHTML = '';
+      document.getElementById('detailModal').style.display = 'none';
+      document.querySelectorAll('#detailModal .modal-field-val, #modalTitle, #modalSub').forEach(el=>el.textContent='');
+      document.getElementById('modalCommentInput').value='';
+      document.getElementById('userEmailDisplay').textContent = '';
+      document.getElementById('appContainer').style.display = 'none';
+      document.getElementById('loginModal').style.display = 'flex';
+      showAuthError('');
+    }
+
+    async function fetchUserProfile() {
+      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: {Authorization: `Bearer ${oauthToken}`} });
+      if (!r.ok) throw new Error('No se pudo verificar tu cuenta de Google. Vuelve a ingresar.');
+      const u = await r.json();
+      if (!u.email || u.email_verified === false) throw new Error('Se necesita una cuenta Google con correo verificado.');
+      oauthUserEmail = u.email;
+      document.getElementById('userEmailDisplay').textContent = u.email;
+      return u.email;
+    }
+
+    // --- DATA FETCHING & PARSING ---
+    async function loadSheetData() {
+      if (!oauthToken || savingLocks.size) return;
+      const requestToken = oauthToken, requestEpoch = dataEpoch;
+      try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_TAB}!A1:U?valueRenderOption=FORMATTED_VALUE`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${oauthToken}` }
+        });
+
+        if (response.status === 401) {
+          handleTokenExpired();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Error HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (oauthToken !== requestToken || dataEpoch !== requestEpoch || savingLocks.size) return;
+        const rows = data.values || [];
+        
+        allClients = parseSheetRows(rows);
+        populateFilterDropdowns();
+        renderApp();
+        
+        const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('lastSyncTime').textContent = `Sync: ${nowStr}`;
+      } catch (err) {
+        console.error('Error al cargar datos de Sheets:', err);
+        showToast('Error al cargar datos de Google Sheets: ' + err.message, 'error');
+      }
+    }
+
+    function startAutoRefresh() {
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+      // Auto reload every 5 minutes if token is active
+      autoRefreshTimer = setInterval(() => {
+        if (oauthToken && Date.now() >= oauthExpiresAt) { handleTokenExpired(); return; }
+        if (oauthToken) {
+          loadSheetData();
+        }
+      }, 300000);
+    }
+
+    function parseSheetRows(rows) {
+      if (!rows || rows.length < 2) return [];
+
+      const headers = rows[0].map(h => String(h || '').trim());
+      const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+
+      const headerMap = {};
+      headers.forEach((h, idx) => {
+        headerMap[norm(h)] = idx;
+      });
+
+      const getColIdx = (name, fallback) => {
+        const mapped = headerMap[norm(name)];
+        if (mapped !== undefined) return mapped;
+        const prefix = Object.keys(headerMap).filter(k => k.startsWith(norm(name)));
+        return prefix.length === 1 ? headerMap[prefix[0]] : fallback;
+      };
+
+      // Header mappings with fallbacks (N14...U21 = 0-based indices 13...20)
+      const idxCliente = getColIdx('cliente', 0);
+      const idxDireccion = getColIdx('direccion', 1);
+      const idxComuna = getColIdx('comuna', 2);
+      const idxVendedor = getColIdx('ultimovendedor', 3);
+      const idxNumCompras = getColIdx('ndecompras', 4);
+      const idxTotalNeto = getColIdx('totalcomprado', 5);
+      const idxPromedioNeto = getColIdx('promediocompras', 6);
+      const idxFrecuencia = getColIdx('frecuencia', 7);
+      const idxUltimaVisita = getColIdx('diaultimavisita', 8);
+      const idxUltimaCompra = getColIdx('diaultimacompra', 9);
+      const idxDiasContacto = getColIdx('diasultimocontacto', 10);
+      const idxDiasSinCompra = getColIdx('diassincompra', 11);
+      const idxLinkMaps = getColIdx('linkmaps', 12);
+
+      const idxLat = getColIdx('latitud', 13);
+      const idxLng = getColIdx('longitud', 14);
+      const idxTel = getColIdx('telefono', 15);
+      const idxStatus = getColIdx('status', 16);
+      const idxID = getColIdx('idcliente', 17);
+      const idxStatusFecha = getColIdx('statusactualizado', 18);
+      const idxUser = getColIdx('actualizadopor', 19);
+      const idxComentario = getColIdx('comentario', 20);
+
+      const parsed = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.length === 0) continue;
+
+        const nombre = String(r[idxCliente] || '').trim();
+        if (!nombre) continue;
+
+        const rawId = String(r[idxID] || '').trim();
+        const idCliente = /^[A-Z0-9_-]{5,80}$/i.test(rawId) ? rawId : `SIN_ID_${i}`;
+        const latStr = String(r[idxLat] || '').replace(',', '.').trim();
+        const lngStr = String(r[idxLng] || '').replace(',', '.').trim();
+        
+        const lat = parseFloat(latStr);
+        const lng = parseFloat(lngStr);
+        const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0 && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+
+        const rawStatus = String(r[idxStatus] || '').trim();
+        // blank = Pendiente ("Nunca marcar por defecto Sigue: blank=Pendiente")
+        const status = (rawStatus === 'Sigue' || rawStatus === 'No Sigue') ? rawStatus : 'Pendiente';
+
+        const numCompras = parseInt(String(r[idxNumCompras] || '0').replace(/\D/g, ''), 10) || 0;
+        const fechaCompraStr = String(r[idxUltimaCompra] || '').trim();
+        const fechaVisitaStr = String(r[idxUltimaVisita] || '').trim();
+
+        const daysSinCompraCalc = calculateDaysAgo(fechaCompraStr);
+        const daysSinVisitaCalc = calculateDaysAgo(fechaVisitaStr);
+
+        parsed.push({
+          _rowIndex: i + 1,
+          id: idCliente,
+          nombre: nombre,
+          direccion: String(r[idxDireccion] || '').trim(),
+          comuna: String(r[idxComuna] || '').trim(),
+          vendedor: String(r[idxVendedor] || '').trim(),
+          numCompras: numCompras,
+          totalNetoStr: String(r[idxTotalNeto] || '$0').trim(),
+          promedioNetoStr: String(r[idxPromedioNeto] || '$0').trim(),
+          totalNetoVal: parseCurrency(String(r[idxTotalNeto] || '')),
+          frecuencia: String(r[idxFrecuencia] || '').trim(),
+          ultimaVisitaDate: fechaVisitaStr,
+          ultimaVisitaDays: daysSinVisitaCalc,
+          ultimaCompraDate: fechaCompraStr,
+          ultimaCompraDays: daysSinCompraCalc,
+          diasContacto: String(r[idxDiasContacto] || '').trim(),
+          rawDiasSinCompra: String(r[idxDiasSinCompra] || '').trim(),
+          linkMapsRaw: String(r[idxLinkMaps] || '').trim(),
+          lat: hasCoords ? lat : null,
+          lng: hasCoords ? lng : null,
+          hasCoords: hasCoords,
+          telefono: String(r[idxTel] || '').trim(),
+          status: status,
+          statusActualizado: String(r[idxStatusFecha] || '').trim(),
+          actualizadoPor: String(r[idxUser] || '').trim(),
+          comentario: String(r[idxComentario] || '').trim()
+        });
+      }
+
+      return parsed;
+    }
+
+    function calculateDaysAgo(dateStr) {
+      if (!dateStr || dateStr === '-' || /1899|1900/.test(dateStr)) return null;
+      const m = String(dateStr).match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+      if (!m) return null;
+      const d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+      if (y < 2000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+      const stamp = Date.UTC(y, mo - 1, d), check = new Date(stamp);
+      if (check.getUTCDate() !== d || check.getUTCMonth() !== mo - 1) return null;
+      const parts = new Intl.DateTimeFormat('en-US', {timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      const obj = Object.fromEntries(parts.filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+      const today = Date.UTC(Number(obj.year), Number(obj.month)-1, Number(obj.day));
+      const days = Math.round((today - stamp) / 86400000);
+      return days >= 0 ? days : null;
+    }
+
+    function parseCurrency(str) {
+      if (!str) return 0;
+      const cleaned = str.replace(/[^\d-]/g, '');
+      return parseInt(cleaned, 10) || 0;
+    }
+
+    // --- FILTER & METRICS ENGINE ---
+    function populateFilterDropdowns() {
+      const comunas = [...new Set(allClients.map(c => c.comuna).filter(Boolean))].sort();
+      const vendedores = [...new Set(allClients.map(c => c.vendedor).filter(Boolean))].sort();
+
+      const comunaSel = document.getElementById('comunaSelect');
+      comunaSel.innerHTML = '<option value="">Todas las comunas</option>' + 
+        comunas.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
+
+      const vendedorSel = document.getElementById('vendedorSelect');
+      vendedorSel.innerHTML = '<option value="">Todos los vendedores</option>' + 
+        vendedores.map(v => `<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
+    }
+
+    function getFilteredClients() {
+      const searchTerm = normText(document.getElementById('searchInput').value);
+      const comunaFilter = document.getElementById('comunaSelect').value;
+      const vendedorFilter = document.getElementById('vendedorSelect').value;
+      const statusFilter = document.getElementById('statusSelect').value;
+      const minDaysVal = Math.max(0, parseInt(document.getElementById('minDaysInput').value, 10) || 0);
+      const alcanceVal = document.getElementById('alcanceSelect').value;
+
+      return allClients.filter(c => {
+        if (searchTerm) {
+          const mName = normText(c.nombre).includes(searchTerm);
+          const mDir = normText(c.direccion).includes(searchTerm);
+          const mCom = normText(c.comuna).includes(searchTerm);
+          const mVend = normText(c.vendedor).includes(searchTerm);
+          const mTel = normText(c.telefono).includes(searchTerm);
+          const mId = normText(c.id).includes(searchTerm);
+          if (!mName && !mDir && !mCom && !mVend && !mTel && !mId) return false;
+        }
+
+        if (comunaFilter && c.comuna !== comunaFilter) return false;
+        if (vendedorFilter && c.vendedor !== vendedorFilter) return false;
+        if (statusFilter && c.status !== statusFilter) return false;
+
+        if (alcanceVal === 'compraron_alguna_vez') {
+          if (c.numCompras <= 0 && c.ultimaCompraDays === null) return false;
+        } else if (alcanceVal === 'sin_compras') {
+          if (c.numCompras > 0 || c.ultimaCompraDays !== null) return false;
+        }
+
+        // Días sin compra mínimo X (strict logic: days > X)
+        if (alcanceVal !== 'sin_compras' && c.ultimaCompraDays !== null && c.ultimaCompraDays <= minDaysVal) return false;
+        if (alcanceVal === 'compraron_alguna_vez' && (c.numCompras <= 0 || c.ultimaCompraDays === null)) return false;
+
+        return true;
+      });
+    }
+
+    function normText(str) {
+      if (!str) return '';
+      return String(str).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    }
+
+    function onFilterChange() {
+      renderApp();
+    }
+
+    // --- COLORING LOGIC ---
+    function getInactivityColor(days) {
+      if (days === null) return '#7f8c8d';
+      if (days <= 30) return '#123047';
+      if (days <= 60) return '#49835b';
+      if (days <= 90) return '#f39c12';
+      if (days <= 180) return '#e74c3c';
+      return '#8b0000';
+    }
+
+    function getStatusColor(status) {
+      if (status === 'Sigue') return '#49835b';
+      if (status === 'No Sigue') return '#c0392b';
+      return '#f39c12';
+    }
+
+    function getMarkerColor(client, scheme) {
+      if (scheme === 'status') {
+        return getStatusColor(client.status);
+      } else {
+        return getInactivityColor(client.ultimaCompraDays);
+      }
+    }
+
+    // --- RENDER APP ---
+    function renderApp() {
+      const filtered = getFilteredClients();
+      renderMetrics(filtered);
+      renderMap(filtered);
+      renderList(filtered);
+      renderLegend();
+    }
+
+    function renderMetrics(filtered) {
+      document.getElementById('metricCount').textContent = `${filtered.length} / ${allClients.length}`;
+
+      let totalNeto = 0;
+      let totalDays = 0;
+      let countDays = 0;
+      let pendientes = 0;
+      let sigue = 0;
+      let noSigue = 0;
+      let sinCoords = 0;
+
+      filtered.forEach(c => {
+        totalNeto += c.totalNetoVal;
+        if (c.ultimaCompraDays !== null) {
+          totalDays += c.ultimaCompraDays;
+          countDays++;
+        }
+        if (c.status === 'Sigue') sigue++;
+        else if (c.status === 'No Sigue') noSigue++;
+        else pendientes++;
+
+        if (!c.hasCoords) sinCoords++;
+      });
+
+      const avgDays = countDays > 0 ? Math.round(totalDays / countDays) : 0;
+
+      document.getElementById('metricTotalNeto').textContent = formatCLP(totalNeto);
+      document.getElementById('metricAvgDays').textContent = `${avgDays} días`;
+      
+      document.getElementById('badgePendiente').textContent = `Pendiente: ${pendientes}`;
+      document.getElementById('badgeSigue').textContent = `Sigue: ${sigue}`;
+      document.getElementById('badgeNoSigue').textContent = `No Sigue: ${noSigue}`;
+
+      const noCoordsBadge = document.getElementById('badgeNoCoords');
+      if (sinCoords > 0) {
+        noCoordsBadge.style.display = 'inline-block';
+        noCoordsBadge.textContent = `${sinCoords} sin coords (no en mapa)`;
+      } else {
+        noCoordsBadge.style.display = 'none';
+      }
+    }
+
+    function formatCLP(val) {
+      return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(val);
+    }
+
+    // --- MAP ENGINE ---
+    function initMapIfNeeded() {
+      if (leafletMap) return;
+      
+      leafletMap = L.map('mapView', { zoomControl: true }).setView([-33.4489, -70.6693], 11);
+      
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 19
+      }).addTo(leafletMap);
+
+      markerClusterGroup = L.markerClusterGroup({
+        maxClusterRadius: 45,
+        disableClusteringAtZoom: 16
+      });
+      leafletMap.addLayer(markerClusterGroup);
+    }
+
+    function renderMap(filtered) {
+      if (!leafletMap || !markerClusterGroup) return;
+
+      markerClusterGroup.clearLayers();
+      const colorScheme = document.getElementById('colorSchemeSelect').value;
+
+      const bounds = [];
+
+      filtered.forEach(client => {
+        if (!client.hasCoords) return;
+
+        const color = getMarkerColor(client, colorScheme);
+        const icon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="
+            background-color: ${color};
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          "></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        });
+
+        const marker = L.marker([client.lat, client.lng], { icon: icon });
+        marker.bindPopup(buildPopupHTML(client));
+        markerClusterGroup.addLayer(marker);
+        bounds.push([client.lat, client.lng]);
+      });
+
+      if (bounds.length > 0) {
+        leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+      }
+    }
+
+    function renderLegend() {
+      const scheme = document.getElementById('colorSchemeSelect').value;
+      const titleEl = document.getElementById('legendTitle');
+      const itemsEl = document.getElementById('legendItems');
+
+      if (scheme === 'status') {
+        titleEl.textContent = 'Status Reactivación';
+        itemsEl.innerHTML = `
+          <div class="legend-item"><div class="legend-color" style="background:#f39c12"></div>⏳ Pendiente</div>
+          <div class="legend-item"><div class="legend-color" style="background:#49835b"></div>✅ Sigue</div>
+          <div class="legend-item"><div class="legend-color" style="background:#c0392b"></div>❌ No Sigue</div>
+        `;
+      } else {
+        titleEl.textContent = 'Días sin compra';
+        itemsEl.innerHTML = `
+          <div class="legend-item"><div class="legend-color" style="background:#123047"></div>&le; 30 días (Activo)</div>
+          <div class="legend-item"><div class="legend-color" style="background:#49835b"></div>31 - 60 días</div>
+          <div class="legend-item"><div class="legend-color" style="background:#f39c12"></div>61 - 90 días</div>
+          <div class="legend-item"><div class="legend-color" style="background:#e74c3c"></div>91 - 180 días</div>
+          <div class="legend-item"><div class="legend-color" style="background:#8b0000"></div>&gt; 180 días (Crítico)</div>
+          <div class="legend-item"><div class="legend-color" style="background:#7f8c8d"></div>Sin compras</div>
+        `;
+      }
+    }
+
+    // --- LIST ENGINE ---
+    function renderList(filtered) {
+      const tbody = document.getElementById('listTableBody');
+      
+      // Sort list by days sin compra DESCENDING ("Lista sort days desc")
+      const sorted = [...filtered].sort((a, b) => {
+        const dA = a.ultimaCompraDays !== null ? a.ultimaCompraDays : -1;
+        const dB = b.ultimaCompraDays !== null ? b.ultimaCompraDays : -1;
+        return dB - dA;
+      });
+
+      if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-muted);">No hay clientes que coincidan con los filtros aplicados.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = sorted.map(c => {
+        const safeId = escapeHTML(c.id);
+        const safeName = escapeHTML(c.nombre);
+        const safeDir = escapeHTML(c.direccion);
+        const safeComuna = escapeHTML(c.comuna);
+        const safeVendor = escapeHTML(c.vendedor);
+        const safeTotal = escapeHTML(c.totalNetoStr);
+        
+        const daysText = c.ultimaCompraDays !== null ? `${c.ultimaCompraDays} días` : 'Sin compras';
+        const visitaText = c.ultimaVisitaDays !== null ? `${c.ultimaVisitaDays} días` : '-';
+
+        const { telLink, waLink } = getPhoneLinks(c.telefono);
+        const mapsLink = getGoogleMapsLink(c);
+        const coordsBadge = !c.hasCoords ? '<span style="color:#b9770e; font-size:10px; font-weight:700;">[Sin Coords]</span>' : '';
+
+        const selClass = c.status === 'Sigue' ? 'sel-sigue' : (c.status === 'No Sigue' ? 'sel-nosigue' : 'sel-pendiente');
+
+        return `
+          <tr>
+            <td>
+              <select class="status-select ${selClass}" onchange="saveStatusFromList('${safeId}', this.value)" ${savingLocks.get(c.id) ? 'disabled' : ''}>
+                <option value="Pendiente" ${c.status === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+                <option value="Sigue" ${c.status === 'Sigue' ? 'selected' : ''}>✅ Sigue</option>
+                <option value="No Sigue" ${c.status === 'No Sigue' ? 'selected' : ''}>❌ No Sigue</option>
+              </select>
+            </td>
+            <td>
+              <div class="client-name">${safeName} ${coordsBadge}</div>
+              <div class="client-sub">📍 ${safeDir}, ${safeComuna} | ID: ${safeId}</div>
+            </td>
+            <td style="font-weight:700; color: ${getInactivityColor(c.ultimaCompraDays)};">
+              ${daysText}
+            </td>
+            <td style="color:var(--text-muted);">
+              ${visitaText}
+            </td>
+            <td style="font-weight:700; color:var(--lup-verde);">
+              ${safeTotal}
+            </td>
+            <td style="color:var(--text-muted);">
+              ${safeVendor}
+            </td>
+            <td>
+              <div style="display:flex; gap: 4px; flex-wrap: wrap;">
+                <button class="btn-action" onclick="openClientDetail('${safeId}')">👁️ Ver</button>
+                <a href="${mapsLink}" target="_blank" rel="noopener noreferrer" class="btn-action btn-maps">🗺️ Ir a Maps</a>
+                ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn-action btn-wa">💬 WA</a>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // --- POPUP & DETAIL MODAL ENGINE ---
+    function buildPopupHTML(client) {
+      const safeName = escapeHTML(client.nombre);
+      const safeDir = escapeHTML(client.direccion);
+      const safeComuna = escapeHTML(client.comuna);
+      const safeVendor = escapeHTML(client.vendedor);
+      const safeId = escapeHTML(client.id);
+      const safeTotal = escapeHTML(client.totalNetoStr);
+      const safeProm = escapeHTML(client.promedioNetoStr);
+
+      const { telLink, waLink } = getPhoneLinks(client.telefono);
+      const mapsLink = getGoogleMapsLink(client);
+
+      const daysText = client.ultimaCompraDays !== null ? `${client.ultimaCompraDays} días` : 'Sin compras';
+      const visitaText = client.ultimaVisitaDays !== null ? `${client.ultimaVisitaDays} días` : 'Sin visitas';
+
+      return `
+        <div style="font-family:'Inter',sans-serif; min-width:240px; padding:4px;">
+          <h3 style="font-size:15px; font-weight:700; color:#123047; margin:0 0 4px 0;">${safeName}</h3>
+          <div style="font-size:12px; color:#5a6e7f; margin-bottom:8px;">
+            <div>📍 ${safeDir}, ${safeComuna}</div>
+            <div>👤 ${safeVendor} | ID: ${safeId}</div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; font-size:11px;">
+            <div style="background:#f7f5ee; padding:6px; border-radius:4px;">
+              <div style="color:#5a6e7f; font-weight:700;">SIN COMPRA</div>
+              <div style="font-size:13px; font-weight:700; color:#123047;">${daysText}</div>
+            </div>
+            <div style="background:#f7f5ee; padding:6px; border-radius:4px;">
+              <div style="color:#5a6e7f; font-weight:700;">ÚLTIMA VISITA</div>
+              <div style="font-size:13px; font-weight:700; color:#123047;">${visitaText}</div>
+            </div>
+            <div style="background:#f7f5ee; padding:6px; border-radius:4px;">
+              <div style="color:#5a6e7f; font-weight:700;">TOTAL NETO</div>
+              <div style="font-size:12px; font-weight:700; color:#49835b;">${safeTotal}</div>
+            </div>
+            <div style="background:#f7f5ee; padding:6px; border-radius:4px;">
+              <div style="color:#5a6e7f; font-weight:700;">PROM. COMPRA</div>
+              <div style="font-size:12px; font-weight:700; color:#123047;">${safeProm}</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+            <a href="${mapsLink}" target="_blank" rel="noopener noreferrer" class="btn-action btn-maps">🗺️ Ir a Maps</a>
+            ${telLink ? `<a href="${telLink}" class="btn-action">📞 Llamar</a>` : ''}
+            ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn-action btn-wa">💬 WA</a>` : ''}
+          </div>
+          <div style="font-size:11px;line-height:1.6;margin-bottom:8px">
+            <b>Última compra:</b> ${escapeHTML(client.ultimaCompraDate || 'Sin compras')}<br>
+            <b>Última visita:</b> ${escapeHTML(client.ultimaVisitaDate || 'Sin visitas')}<br>
+            <b>Compras:</b> ${client.numCompras} · <b>Frecuencia:</b> ${escapeHTML(client.frecuencia || 'Sin dato')} días<br>
+            <b>Último contacto:</b> ${escapeHTML(client.diasContacto || 'Sin dato')} días<br>
+            <b>Teléfono:</b> ${escapeHTML(client.telefono || 'Sin teléfono')}<br>
+            <button class="btn-action" onclick="openClientDetail('${safeId}')">Ver ficha y comentario</button>
+          </div>
+          <div style="border-top:1px solid #e2e7ec; padding-top:8px;">
+            <label style="font-size:11px; font-weight:700; color:#5a6e7f; display:block; margin-bottom:4px;">STATUS REACTIVACIÓN:</label>
+            <select onchange="saveStatusFromPopup('${safeId}', this.value)" style="width:100%; padding:6px; border-radius:6px; font-weight:700; font-size:12px;">
+              <option value="Pendiente" ${client.status === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+              <option value="Sigue" ${client.status === 'Sigue' ? 'selected' : ''}>✅ Sigue</option>
+              <option value="No Sigue" ${client.status === 'No Sigue' ? 'selected' : ''}>❌ No Sigue</option>
+            </select>
+          </div>
+        </div>
+      `;
+    }
+
+    function openClientDetail(clientId) {
+      const client = allClients.find(c => c.id === clientId);
+      if (!client) return;
+
+      activeClientModal = client;
+      document.getElementById('modalTitle').textContent = client.nombre;
+      document.getElementById('modalSub').textContent = `📍 ${client.direccion}, ${client.comuna} | Vendedor: ${client.vendedor}`;
+      document.getElementById('modalId').textContent = client.id;
+      document.getElementById('modalPhone').textContent = client.telefono || 'Sin registro';
+      document.getElementById('modalDaysSinCompra').textContent = client.ultimaCompraDays !== null ? `${client.ultimaCompraDays} días` : 'Sin compras';
+      document.getElementById('modalFechaCompra').textContent = client.ultimaCompraDate || '-';
+      document.getElementById('modalDaysVisita').textContent = client.ultimaVisitaDays !== null ? `${client.ultimaVisitaDays} días` : 'Sin visitas';
+      document.getElementById('modalFechaVisita').textContent = client.ultimaVisitaDate || '-';
+      document.getElementById('modalTotalNeto').textContent = client.totalNetoStr;
+      document.getElementById('modalPromedioNeto').textContent = client.promedioNetoStr;
+      document.getElementById('modalNumCompras').textContent = client.numCompras;
+      document.getElementById('modalFrecuencia').textContent = client.frecuencia ? `${client.frecuencia} días` : '-';
+
+      document.getElementById('modalStatusSelect').value = client.status;
+      document.getElementById('modalCommentInput').value = client.comentario || '';
+
+      document.getElementById('modalMapsLink').href = getGoogleMapsLink(client);
+
+      const { waLink } = getPhoneLinks(client.telefono);
+      const waBtn = document.getElementById('modalWaLink');
+      if (waLink) {
+        waBtn.href = waLink;
+        waBtn.style.display = 'inline-flex';
+      } else {
+        waBtn.style.display = 'none';
+      }
+
+      document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('detailModal').style.display = 'none';
+      activeClientModal = null;
+    }
+
+    function closeModalOnOverlay(e) {
+      if (e.target.id === 'detailModal') {
+        closeModal();
+      }
+    }
+
+    async function saveModalChanges() {
+      if (!activeClientModal) return;
+      const newStatus = document.getElementById('modalStatusSelect').value;
+      const comment = document.getElementById('modalCommentInput').value;
+      
+      const success = await updateClientStatusInSheet(activeClientModal, newStatus, comment);
+      if (success) {
+        closeModal();
+      }
+    }
+
+    function saveStatusFromList(clientId, newStatus) {
+      const client = allClients.find(c => c.id === clientId);
+      if (client) {
+        updateClientStatusInSheet(client, newStatus, client.comentario);
+      }
+    }
+
+    function saveStatusFromPopup(clientId, newStatus) {
+      const client = allClients.find(c => c.id === clientId);
+      if (client) {
+        updateClientStatusInSheet(client, newStatus, client.comentario);
+      }
+    }
+
+    // --- WRITE TO GOOGLE SHEETS & CONCURRENCY HANDLER ---
+    async function updateClientStatusInSheet(clientObj, newStatus, commentText) {
+      if (!oauthToken || Date.now() >= oauthExpiresAt) { handleTokenExpired(); return false; }
+      if (!['Pendiente','Sigue','No Sigue'].includes(newStatus)) return false;
+      const clientId = clientObj.id;
+      if (!/^[A-Z0-9_-]{5,80}$/i.test(clientId) || clientId.startsWith('SIN_ID_')) { showToast('Falta un ID válido. No se modificó la hoja.','error'); return false; }
+      if (!oauthUserEmail) { showToast('No se pudo verificar tu correo. Ingresa nuevamente.','error'); return false; }
+      if (savingLocks.has(clientId)) return false;
+      const prevStatus = clientObj.status, previousComment = clientObj.comentario || '', requestToken = oauthToken;
+      const commentChanged = commentText !== undefined && commentText !== previousComment;
+      savingLocks.set(clientId,true); dataEpoch++; renderList(getFilteredClients());
+      try {
+        const headers = {Authorization:`Bearer ${requestToken}`, 'Content-Type':'application/json'};
+        const readRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(SHEET_TAB+'!Q1:U')}?valueRenderOption=FORMATTED_VALUE`, {headers});
+        if (readRes.status === 401) { handleTokenExpired(); throw new Error('Sesión expirada.'); }
+        if (!readRes.ok) throw new Error('No se pudo comprobar la fila actual. No se guardó ningún cambio.');
+        const rs = (await readRes.json()).values || [];
+        if (normText(rs[0]?.[0]||'') !== 'status' || normText(rs[0]?.[1]||'').replace(/\s/g,'') !== 'idcliente') throw new Error('Las columnas Status e ID cambiaron de lugar. No se guardó ningún cambio.');
+        const matches = rs.map((r,i)=>({r,row:i+1})).filter(x=>String(x.r[1]||'').trim()===clientId);
+        if (matches.length !== 1) throw new Error('El ID no aparece una sola vez en la hoja. Actualiza antes de guardar.');
+        const hit=matches[0], remote = ['Sigue','No Sigue'].includes(hit.r[0]) ? hit.r[0] : 'Pendiente';
+        if (remote !== prevStatus) { clientObj.status=remote; throw new Error('Otra persona cambió este estado. Se muestra el valor actual; revísalo antes de volver a guardar.'); }
+        const remoteComment=String(hit.r[4]||'');
+        if (commentChanged && remoteComment !== previousComment) { clientObj.comentario=remoteComment; throw new Error('Otra persona cambió el comentario. Actualiza y revisa antes de sobrescribirlo.'); }
+        if (oauthToken !== requestToken) throw new Error('La sesión cambió. No se guardó ningún cambio.');
+        const stamp = new Date().toISOString(), data = [
+          {range:`${SHEET_TAB}!Q${hit.row}`,values:[[newStatus==='Pendiente'?'':newStatus]]},
+          {range:`${SHEET_TAB}!S${hit.row}:T${hit.row}`,values:[[stamp,oauthUserEmail]]}
+        ];
+        if (commentChanged) data.push({range:`${SHEET_TAB}!U${hit.row}`,values:[[commentText]]});
+        const wr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchUpdate`, {method:'POST',headers,body:JSON.stringify({valueInputOption:'RAW',data})});
+        if (wr.status === 401) { handleTokenExpired(); throw new Error('Sesión expirada.'); }
+        if (!wr.ok) throw new Error(wr.status===403?'Tu cuenta necesita permiso de edición en esta planilla.':'Google Sheets no confirmó el guardado. Vuelve a cargar antes de reintentar.');
+        if (oauthToken !== requestToken) return true;
+        clientObj.status=newStatus; clientObj.statusActualizado=stamp; clientObj.actualizadoPor=oauthUserEmail;
+        clientObj.comentario=commentChanged?commentText:remoteComment;
+        showToast('Estado guardado en la planilla.','success'); renderApp(); return true;
+      } catch(err) {
+        console.warn('No se pudo guardar:',err.message);
+        if (oauthToken===requestToken) { renderApp(); showToast(err.message,'error'); }
+        return false;
+      } finally { dataEpoch++; savingLocks.delete(clientId); if (oauthToken) renderList(getFilteredClients()); }
+    }
+
+    // --- UI HELPERS & UTILS ---
+    function switchTab(tabName) {
+      const mapTab = document.getElementById('mapTab');
+      const listTab = document.getElementById('listTab');
+      const btnMap = document.getElementById('tabBtnMap');
+      const btnList = document.getElementById('tabBtnList');
+
+      if (tabName === 'map') {
+        mapTab.classList.add('active');
+        listTab.classList.remove('active');
+        btnMap.classList.add('active');
+        btnList.classList.remove('active');
+        if (leafletMap) {
+          setTimeout(() => leafletMap.invalidateSize(), 200);
+        }
+      } else {
+        listTab.classList.add('active');
+        mapTab.classList.remove('active');
+        btnList.classList.add('active');
+        btnMap.classList.remove('active');
+      }
+    }
+
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function getPhoneLinks(phoneStr) {
+      if (!phoneStr) return { telLink: null, waLink: null };
+      const digits = phoneStr.replace(/\D/g, '');
+      if (!digits) return { telLink: null, waLink: null };
+
+      let fullNum = digits;
+      if (digits.length === 9 && (digits.startsWith('9') || digits.startsWith('2'))) {
+        fullNum = '56' + digits;
+      }
+
+      return {
+        telLink: `tel:+${fullNum}`,
+        waLink: `https://wa.me/${fullNum}`
+      };
+    }
+
+    function getGoogleMapsLink(client) {
+      if (client.hasCoords) {
+        return `https://www.google.com/maps/search/?api=1&query=${client.lat},${client.lng}`;
+      }
+      const query = encodeURIComponent(`${client.direccion}, ${client.comuna}, Chile`);
+      return `https://www.google.com/maps/search/?api=1&query=${query}`;
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.background = type === 'error' ? '#c0392b' : (type === 'success' ? '#49835b' : '#123047');
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
