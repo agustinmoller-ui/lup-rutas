@@ -583,7 +583,7 @@
     <div class="live-banner">
       <div>
         <span class="banner-dot"></span>
-        <span>Base histórica al 22/10/2026. Estados compartidos en la planilla; nuevas ventas no se sincronizan automáticamente.</span>
+        <span>Base histórica al 22/10/2026. Estados bidireccionales: se actualizan cada 30 s. Nuevas ventas no se importan automáticamente.</span>
       </div>
       <div id="lastSyncTime" style="font-size: 11px; opacity: 0.8;">Sync: Justo ahora</div>
     </div>
@@ -800,6 +800,9 @@
     let oauthExpiresAt = 0;
     let savingLocks = new Map(); // Concurrent save lock per client ID
 
+    window.addEventListener('focus', () => { if(oauthToken) loadSheetData(); });
+    document.addEventListener('visibilitychange', () => { if(document.visibilityState==='visible' && oauthToken) loadSheetData(); });
+
     // --- GOOGLE OAUTH 2.0 (GSI) FLOW ---
     window.onload = function() {
       initGoogleAuth();
@@ -898,9 +901,12 @@
         if (oauthToken !== requestToken || dataEpoch !== requestEpoch || savingLocks.size) return;
         const rows = data.values || [];
         
-        allClients = parseSheetRows(rows);
-        populateFilterDropdowns();
-        renderApp();
+        const nextClients = parseSheetRows(rows);
+        if (JSON.stringify(nextClients) !== JSON.stringify(allClients)) {
+          allClients = nextClients;
+          populateFilterDropdowns();
+          renderApp();
+        }
         
         const nowStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
         document.getElementById('lastSyncTime').textContent = `Sync: ${nowStr}`;
@@ -912,13 +918,13 @@
 
     function startAutoRefresh() {
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-      // Auto reload every 5 minutes if token is active
+      // Refresh sheet changes every 30 seconds while the app is visible
       autoRefreshTimer = setInterval(() => {
         if (oauthToken && Date.now() >= oauthExpiresAt) { handleTokenExpired(); return; }
-        if (oauthToken) {
+        if (oauthToken && document.visibilityState === 'visible') {
           loadSheetData();
         }
-      }, 300000);
+      }, 30000);
     }
 
     function parseSheetRows(rows) {
@@ -1048,6 +1054,8 @@
 
     // --- FILTER & METRICS ENGINE ---
     function populateFilterDropdowns() {
+      const oldComuna = document.getElementById('comunaSelect').value;
+      const oldVendedor = document.getElementById('vendedorSelect').value;
       const comunas = [...new Set(allClients.map(c => c.comuna).filter(Boolean))].sort();
       const vendedores = [...new Set(allClients.map(c => c.vendedor).filter(Boolean))].sort();
 
@@ -1058,6 +1066,8 @@
       const vendedorSel = document.getElementById('vendedorSelect');
       vendedorSel.innerHTML = '<option value="">Todos los vendedores</option>' + 
         vendedores.map(v => `<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
+      if ([...comunaSel.options].some(o=>o.value===oldComuna)) comunaSel.value=oldComuna;
+      if ([...vendedorSel.options].some(o=>o.value===oldVendedor)) vendedorSel.value=oldVendedor;
     }
 
     function getFilteredClients() {
@@ -1191,8 +1201,9 @@
       
       leafletMap = L.map('mapView', { zoomControl: true }).setView([-33.4489, -70.6693], 11);
       
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+        referrerPolicy: 'strict-origin-when-cross-origin',
         maxZoom: 19
       }).addTo(leafletMap);
 
